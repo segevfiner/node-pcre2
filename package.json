@@ -1,0 +1,20 @@
+{
+  "name": "@segevfiner/pcre2",
+  "version": "0.1.0",
+  "description": "",
+  "type": "commonjs",
+  "main": "./dist/index.js",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "Segev Finer <segev208@gmail.com>",
+  "license": "BSD-3-Clause",
+  "engines": {
+    "node": ">=18"
+  },
+  "packageManager": "pnpm@10.2.1+sha512.398035c7bd696d0ba0b10a688ed558285329d27ea994804a52bad9167d8e3a72bcb993f9699585d3ca25779ac64949ef422757a6c31102c12ab932e5cbe5cc92"
+}
