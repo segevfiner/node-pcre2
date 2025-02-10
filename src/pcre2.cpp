@@ -25,12 +25,30 @@ private:
 };
 
 Napi::Object PCRE2::Init(Napi::Env env, Napi::Object exports) {
+    Napi::Object symbol = env.Global().Get("Symbol").As<Napi::Object>();
     Napi::Function func = DefineClass(env, "PCRE2", {
+        // InstanceMethod<&PCRE2::Exec>("exec"),
         InstanceMethod<&PCRE2::Test>("test"),
-        // TODO
+        // TODO There is no standard way to convert utf-16 to utf-8 and no support for formatting u16string....
+        //  Also need to decide on the correct format for the string representation
         // InstanceMethod<&PCRE2::ToString>("toString"),
         // InstanceMethod<&PCRE2::ToString>(Napi::Symbol::For(env, "nodejs.util.inspect.custom")),
+        // InstanceMethod<&PCRE2::Match>(symbol["match"]),
+        // InstanceMethod<&PCRE2::MatchAll>(symbol["matchAll"]),
+        // InstanceMethod<&PCRE2::Replace>(symbol["replace"]),
+        // InstanceMethod<&PCRE2::Search>(symbol["search"]),
+        // InstanceMethod<&PCRE2::Split>(symbol["split"]),
+        // InstanceAccessor<&PCRE2::LastIndex>("lastIndex"),
         InstanceAccessor<&PCRE2::Source>("source"),
+        // InstanceAccessor<&PCRE2::Flags>("flags"),
+        // InstanceAccessor<&PCRE2::DotAll>("dotAll"),
+        // InstanceAccessor<&PCRE2::Global>("global"),
+        // InstanceAccessor<&PCRE2::HasIndices>("hasIndices"),
+        // InstanceAccessor<&PCRE2::IgnoreCase>("ignoreCase"),
+        // InstanceAccessor<&PCRE2::Multiline>("multiline"),
+        // InstanceAccessor<&PCRE2::Sticky>("sticky"),
+        // InstanceAccessor<&PCRE2::Unicode>("unicode"),
+        // InstanceAccessor<&PCRE2::UnicodeSets>("unicodeSets"),
     });
 
     exports.Set("PCRE2", func);
