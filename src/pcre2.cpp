@@ -111,7 +111,7 @@ Napi::Value PCRE2::Test(const Napi::CallbackInfo &info)
             return Napi::Boolean::New(info.Env(), false);
         } else {
             std::ostringstream oss;
-            oss << "PCRE2 matching error:" << rc;
+            oss << "PCRE2 matching error: " << rc;
             throw Napi::Error::New(info.Env(), oss.str());
         }
     }
@@ -132,7 +132,7 @@ size_t PCRE2::PatternSize(Napi::Env env) const {
     int rc = pcre2_pattern_info(m_re, PCRE2_INFO_SIZE, &size);
     if (rc < 0) {
         std::ostringstream oss;
-        oss << "PCRE2 error:" << rc;
+        oss << "PCRE2 error: " << rc;
         throw Napi::Error::New(env, oss.str());
     }
 
