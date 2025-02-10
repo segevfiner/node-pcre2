@@ -13,9 +13,12 @@ public:
 
 private:
     Napi::Value Test(const Napi::CallbackInfo &info);
+    Napi::Value ToString(const Napi::CallbackInfo &info);
+    Napi::Value Source(const Napi::CallbackInfo &info);
 
     size_t PatternSize(Napi::Env env) const;
 
+    std::string m_source;
     pcre2_code *m_re;
     pcre2_match_data *m_match_data;
     size_t m_size;
@@ -24,6 +27,10 @@ private:
 Napi::Object PCRE2::Init(Napi::Env env, Napi::Object exports) {
     Napi::Function func = DefineClass(env, "PCRE2", {
         InstanceMethod<&PCRE2::Test>("test"),
+        // TODO
+        // InstanceMethod<&PCRE2::ToString>("toString"),
+        // InstanceMethod<&PCRE2::ToString>(Napi::Symbol::For(env, "nodejs.util.inspect.custom")),
+        InstanceAccessor<&PCRE2::Source>("source"),
     });
 
     exports.Set("PCRE2", func);
@@ -42,13 +49,13 @@ PCRE2::PCRE2(const Napi::CallbackInfo &info)
     }
 
     Napi::String pattern = info[0].As<Napi::String>();
-    std::string patternStr = pattern.Utf8Value();
+    m_source = pattern.Utf8Value();
 
     int errornumber;
     size_t erroroffset;
     m_re = pcre2_compile(
-        reinterpret_cast<PCRE2_SPTR>(patternStr.c_str()),
-        patternStr.size(),
+        reinterpret_cast<PCRE2_SPTR>(m_source.c_str()),
+        m_source.size(),
         PCRE2_UTF,
         &errornumber,
         &erroroffset,
@@ -68,7 +75,7 @@ PCRE2::PCRE2(const Napi::CallbackInfo &info)
         throw Napi::Error::New(info.Env(), "PCRE2 match data allocation failed");
     }
 
-    m_size = PatternSize(info.Env()) + pcre2_get_match_data_size(m_match_data);
+    m_size = m_source.size() + PatternSize(info.Env()) + pcre2_get_match_data_size(m_match_data);
     Napi::MemoryManagement::AdjustExternalMemory(info.Env(), m_size);
 }
 
@@ -112,6 +119,13 @@ Napi::Value PCRE2::Test(const Napi::CallbackInfo &info)
     return Napi::Boolean::New(info.Env(), true);
 }
 
+Napi::Value PCRE2::ToString(const Napi::CallbackInfo &info)
+{
+    std::ostringstream oss;
+    oss << "pcre2`" << m_source << "`";
+    return Napi::String::New(info.Env(), oss.str());
+}
+
 size_t PCRE2::PatternSize(Napi::Env env) const {
     size_t size;
     int rc = pcre2_pattern_info(m_re, PCRE2_INFO_SIZE, &size);
@@ -122,6 +136,10 @@ size_t PCRE2::PatternSize(Napi::Env env) const {
     }
 
     return size;
+}
+
+Napi::Value PCRE2::Source(const Napi::CallbackInfo &info) {
+    return Napi::String::New(info.Env(), m_source);
 }
 
 static Napi::Object Init(Napi::Env env, Napi::Object exports) {
