@@ -1,0 +1,16 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "npm: build",
+			"type": "npm",
+			"detail": "cmake-js build",
+			"script": "build",
+			"problemMatcher": ["$gcc", "$msCompile"],
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			}
+		}
+	]
+}
