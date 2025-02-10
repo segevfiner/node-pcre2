@@ -3,9 +3,13 @@
   "version": "0.1.0",
   "description": "",
   "type": "commonjs",
+  "types": "./dist/index.d.ts",
   "main": "./dist/index.js",
   "exports": {
-    ".": "./dist/index.js"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
   },
   "scripts": {
     "install": "cmake-js compile",
