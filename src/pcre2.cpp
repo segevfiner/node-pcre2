@@ -18,7 +18,7 @@ private:
 
     size_t PatternSize(Napi::Env env) const;
 
-    std::string m_source;
+    std::u16string m_source;
     pcre2_code *m_re;
     pcre2_match_data *m_match_data;
     size_t m_size;
@@ -49,7 +49,7 @@ PCRE2::PCRE2(const Napi::CallbackInfo &info)
     }
 
     Napi::String pattern = info[0].As<Napi::String>();
-    m_source = pattern.Utf8Value();
+    m_source = pattern.Utf16Value();
 
     int errornumber;
     size_t erroroffset;
@@ -75,7 +75,7 @@ PCRE2::PCRE2(const Napi::CallbackInfo &info)
         throw Napi::Error::New(info.Env(), "PCRE2 match data allocation failed");
     }
 
-    m_size = m_source.size() + PatternSize(info.Env()) + pcre2_get_match_data_size(m_match_data);
+    m_size = (m_source.size() * sizeof(char16_t)) + PatternSize(info.Env()) + pcre2_get_match_data_size(m_match_data);
     Napi::MemoryManagement::AdjustExternalMemory(info.Env(), m_size);
 }
 
@@ -95,7 +95,7 @@ Napi::Value PCRE2::Test(const Napi::CallbackInfo &info)
     }
 
     Napi::String subject = info[0].As<Napi::String>();
-    std::string subjectStr = subject.Utf8Value();
+    std::u16string subjectStr = subject.Utf16Value();
 
     int rc = pcre2_match(
         m_re,
@@ -119,12 +119,13 @@ Napi::Value PCRE2::Test(const Napi::CallbackInfo &info)
     return Napi::Boolean::New(info.Env(), true);
 }
 
-Napi::Value PCRE2::ToString(const Napi::CallbackInfo &info)
-{
-    std::ostringstream oss;
-    oss << "pcre2`" << m_source << "`";
-    return Napi::String::New(info.Env(), oss.str());
-}
+// TODO There is no standard way to convert utf-16 to utf-8 and no support for formatting u16string....
+// Napi::Value PCRE2::ToString(const Napi::CallbackInfo &info)
+// {
+//     std::ostringstream oss;
+//     oss << "pcre2`" << m_source << "`";
+//     return Napi::String::New(info.Env(), oss.str());
+// }
 
 size_t PCRE2::PatternSize(Napi::Env env) const {
     size_t size;
