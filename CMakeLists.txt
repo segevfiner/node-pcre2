@@ -16,6 +16,7 @@ add_library(${PROJECT_NAME} SHARED
 )
 set_target_properties(${PROJECT_NAME} PROPERTIES PREFIX "" SUFFIX ".node")
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_JS_INC})
+target_compile_definitions(${PROJECT_NAME} PRIVATE NODE_ADDON_API_CPP_EXCEPTIONS PCRE2_STATIC PCRE2_CODE_UNIT_WIDTH=8)
 target_link_libraries(${PROJECT_NAME} PRIVATE ${CMAKE_JS_LIB} pcre2-8-static)
 target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_17)
 
