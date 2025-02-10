@@ -14,8 +14,11 @@ public:
 private:
     Napi::Value Test(const Napi::CallbackInfo &info);
 
+    size_t PatternSize(Napi::Env env) const;
+
     pcre2_code *m_re;
     pcre2_match_data *m_match_data;
+    size_t m_size;
 };
 
 Napi::Object PCRE2::Init(Napi::Env env, Napi::Object exports) {
@@ -65,13 +68,14 @@ PCRE2::PCRE2(const Napi::CallbackInfo &info)
         throw Napi::Error::New(info.Env(), "PCRE2 match data allocation failed");
     }
 
-    // TODO
-    // Napi::MemoryManagement::AdjustExternalMemory(info.Env(), )
+    m_size = PatternSize(info.Env()) + pcre2_get_match_data_size(m_match_data);
+    Napi::MemoryManagement::AdjustExternalMemory(info.Env(), m_size);
 }
 
 PCRE2::~PCRE2() {
     pcre2_match_data_free(m_match_data);
     pcre2_code_free(m_re);
+    Napi::MemoryManagement::AdjustExternalMemory(Env(), -m_size);
 }
 
 Napi::Value PCRE2::Test(const Napi::CallbackInfo &info)
@@ -106,6 +110,18 @@ Napi::Value PCRE2::Test(const Napi::CallbackInfo &info)
     }
 
     return Napi::Boolean::New(info.Env(), true);
+}
+
+size_t PCRE2::PatternSize(Napi::Env env) const {
+    size_t size;
+    int rc = pcre2_pattern_info(m_re, PCRE2_INFO_SIZE, &size);
+    if (rc < 0) {
+        std::ostringstream oss;
+        oss << "PCRE2 error:" << rc;
+        throw Napi::Error::New(env, oss.str());
+    }
+
+    return size;
 }
 
 static Napi::Object Init(Napi::Env env, Napi::Object exports) {
