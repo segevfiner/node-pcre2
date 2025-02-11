@@ -2,6 +2,24 @@
 #include <pcre2.h>
 #include <sstream>
 
+class InstanceData {
+public:
+    explicit InstanceData(Napi::Env env);
+
+    virtual ~InstanceData() {}
+
+    InstanceData(const InstanceData&) = delete;
+    InstanceData& operator=(const InstanceData&) = delete;
+
+    Napi::FunctionReference RegExp;
+
+    Napi::FunctionReference PCRE2;
+};
+
+InstanceData::InstanceData(Napi::Env env) {
+    RegExp = Napi::Persistent(env.Global().Get("RegExp").As<Napi::Function>());
+}
+
 class PCRE2 : public Napi::ObjectWrap<PCRE2> {
 public:
     static Napi::Object Init(Napi::Env env, Napi::Object exports);
@@ -15,16 +33,20 @@ private:
     Napi::Value Test(const Napi::CallbackInfo &info);
     Napi::Value ToString(const Napi::CallbackInfo &info);
     Napi::Value Source(const Napi::CallbackInfo &info);
+    Napi::Value Flags(const Napi::CallbackInfo &info);
 
     size_t PatternSize(Napi::Env env) const;
 
-    std::u16string m_source;
+    std::u16string m_pattern;
+    std::string m_flags;
     pcre2_code *m_re;
     pcre2_match_data *m_match_data;
     size_t m_size;
 };
 
 Napi::Object PCRE2::Init(Napi::Env env, Napi::Object exports) {
+    InstanceData *instanceData = env.GetInstanceData<InstanceData>();
+
     Napi::Object symbol = env.Global().Get("Symbol").As<Napi::Object>();
     Napi::Function func = DefineClass(env, "PCRE2", {
         // InstanceMethod<&PCRE2::Exec>("exec"),
@@ -40,7 +62,7 @@ Napi::Object PCRE2::Init(Napi::Env env, Napi::Object exports) {
         // InstanceMethod<&PCRE2::Split>(symbol["split"]),
         // InstanceAccessor<&PCRE2::LastIndex>("lastIndex"),
         InstanceAccessor<&PCRE2::Source>("source"),
-        // InstanceAccessor<&PCRE2::Flags>("flags"),
+        InstanceAccessor<&PCRE2::Flags>("flags"),
         // InstanceAccessor<&PCRE2::DotAll>("dotAll"),
         // InstanceAccessor<&PCRE2::Global>("global"),
         // InstanceAccessor<&PCRE2::HasIndices>("hasIndices"),
@@ -51,6 +73,7 @@ Napi::Object PCRE2::Init(Napi::Env env, Napi::Object exports) {
         // InstanceAccessor<&PCRE2::UnicodeSets>("unicodeSets"),
     });
 
+    instanceData->PCRE2 = Napi::Persistent(func);
     exports.Set("PCRE2", func);
 
     return exports;
@@ -59,22 +82,49 @@ Napi::Object PCRE2::Init(Napi::Env env, Napi::Object exports) {
 PCRE2::PCRE2(const Napi::CallbackInfo &info)
     : Napi::ObjectWrap<PCRE2>(info)
 {
+    InstanceData *instanceData = info.Env().GetInstanceData<InstanceData>();
+
     if (info.Length() < 1) {
         throw Napi::TypeError::New(info.Env(), "Wrong number of arguments");
     }
-    if (!info[0].IsString()) {
+
+    if (info[0].IsString()) {
+        m_pattern = info[0].As<Napi::String>().Utf16Value();
+    } else if (info[0].IsObject() && info[0].As<Napi::Object>().InstanceOf(instanceData->RegExp.Value())) {
+        Napi::Object re = info[0].As<Napi::Object>();
+        Napi::Value source = re.Get("source");
+        if (!source.IsString()) {
+            throw Napi::TypeError::New(info.Env(), "Expected a string");
+        }
+        m_pattern = source.As<Napi::String>().Utf16Value();
+
+        Napi::Value flags = re.Get("flags");
+        if (!flags.IsString()) {
+            throw Napi::TypeError::New(info.Env(), "Expected a string");
+        }
+        m_flags = flags.As<Napi::String>().Utf8Value();
+    } else if (info[0].IsObject() && info[0].As<Napi::Object>().InstanceOf(instanceData->PCRE2.Value())) {
+        PCRE2 *pcre2 = PCRE2::Unwrap(info[0].As<Napi::Object>());
+        m_pattern = pcre2->m_pattern;
+        m_flags = pcre2->m_flags;
+    } else {
         throw Napi::TypeError::New(info.Env(), "Expected a string");
     }
 
-    Napi::String pattern = info[0].As<Napi::String>();
-    m_source = pattern.Utf16Value();
+    if (info.Length() > 1) {
+        if (!info[1].IsString()) {
+            throw Napi::TypeError::New(info.Env(), "Expected a string");
+        }
+        m_flags = info[1].As<Napi::String>().Utf8Value();
+    }
 
     int errornumber;
     size_t erroroffset;
     m_re = pcre2_compile(
-        reinterpret_cast<PCRE2_SPTR>(m_source.c_str()),
-        m_source.size(),
-        PCRE2_UTF,
+        reinterpret_cast<PCRE2_SPTR>(m_pattern.c_str()),
+        m_pattern.size(),
+        // TODO Convert flags to PCRE2 options
+        0,
         &errornumber,
         &erroroffset,
         nullptr
@@ -93,7 +143,7 @@ PCRE2::PCRE2(const Napi::CallbackInfo &info)
         throw Napi::Error::New(info.Env(), "PCRE2 match data allocation failed");
     }
 
-    m_size = (m_source.size() * sizeof(char16_t)) + PatternSize(info.Env()) + pcre2_get_match_data_size(m_match_data);
+    m_size = (m_pattern.size() * sizeof(char16_t)) + PatternSize(info.Env()) + pcre2_get_match_data_size(m_match_data);
     Napi::MemoryManagement::AdjustExternalMemory(info.Env(), m_size);
 }
 
@@ -112,8 +162,7 @@ Napi::Value PCRE2::Test(const Napi::CallbackInfo &info)
         throw Napi::TypeError::New(info.Env(), "Expected a string");
     }
 
-    Napi::String subject = info[0].As<Napi::String>();
-    std::u16string subjectStr = subject.Utf16Value();
+    std::u16string subjectStr = info[0].As<Napi::String>().Utf16Value();
 
     int rc = pcre2_match(
         m_re,
@@ -158,10 +207,15 @@ size_t PCRE2::PatternSize(Napi::Env env) const {
 }
 
 Napi::Value PCRE2::Source(const Napi::CallbackInfo &info) {
-    return Napi::String::New(info.Env(), m_source);
+    return Napi::String::New(info.Env(), m_pattern);
+}
+
+Napi::Value PCRE2::Flags(const Napi::CallbackInfo &info) {
+    return Napi::String::New(info.Env(), m_flags);
 }
 
 static Napi::Object Init(Napi::Env env, Napi::Object exports) {
+    env.SetInstanceData(new InstanceData(env));
     PCRE2::Init(env, exports);
     return exports;
 }
