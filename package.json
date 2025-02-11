@@ -16,6 +16,8 @@
     "compile": "cmake-js compile",
     "build": "tsc && cmake-js build",
     "prebuild": "prebuild --backend cmake-js -r napi -t 8",
+    "type-check": "tsc -b --noEmit",
+    "lint": "eslint",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
@@ -25,9 +27,6 @@
   "keywords": [],
   "author": "Segev Finer <segev208@gmail.com>",
   "license": "BSD-3-Clause",
-  "engines": {
-    "node": ">=18"
-  },
   "binary": {
     "napi_versions": [
       8
@@ -41,11 +40,15 @@
     "prebuild-install": "^7.1.3"
   },
   "devDependencies": {
-    "@tsconfig/node18": "^18.2.4",
+    "@eslint/js": "^9.20.0",
+    "@tsconfig/node20": "^20.1.4",
     "@types/bindings": "^1.5.5",
-    "@types/node": "18",
+    "@types/node": "20",
+    "eslint": "^9.20.1",
+    "globals": "^15.14.0",
     "prebuild": "^13.0.1",
-    "typescript": "^5.7.3"
+    "typescript": "~5.7.3",
+    "typescript-eslint": "^8.24.0"
   },
   "files": [
     "CMakeLists.txt",

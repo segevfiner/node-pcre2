@@ -1,0 +1,12 @@
+{
+    "extends": "@tsconfig/node20/tsconfig.json",
+    "include": ["lib/**/*"],
+    "compilerOptions": {
+        "outDir": "dist",
+        "rootDir": "lib",
+        "declaration": true,
+        "sourceMap": true,
+        "isolatedModules": true,
+        "types": ["node"]
+    }
+}

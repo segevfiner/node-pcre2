@@ -1,0 +1,12 @@
+{
+    "extends": "@tsconfig/node20/tsconfig.json",
+    "include": [
+        "eslint.config.mjs"
+    ],
+    "compilerOptions": {
+        "noEmit": true,
+        "isolatedModules": true,
+        "allowJs": true,
+        "types": ["node"]
+    }
+}
