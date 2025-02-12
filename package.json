@@ -12,6 +12,7 @@
     }
   },
   "scripts": {
+    "prepack": "tsc -b",
     "install": "prebuild-install -r napi || cmake-js compile",
     "compile": "cmake-js compile",
     "build": "tsc -b && cmake-js build",
