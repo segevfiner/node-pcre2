@@ -46,7 +46,9 @@ private:
 
     std::u16string m_pattern;
     std::string m_flags;
+    uint32_t m_options;
     bool m_global;
+    bool m_sticky;
     pcre2_code *m_re;
     pcre2_match_data *m_matchData;
     size_t m_lastIndex;
@@ -73,14 +75,13 @@ Napi::Object PCRE2::Init(Napi::Env env, Napi::Object exports) {
         InstanceAccessor<&PCRE2::GetLastIndex, &PCRE2::SetLastIndex>("lastIndex"),
         InstanceAccessor<&PCRE2::Source>("source"),
         InstanceAccessor<&PCRE2::Flags>("flags"),
-        // InstanceAccessor<&PCRE2::DotAll>("dotAll"),
-        // InstanceAccessor<&PCRE2::Global>("global"),
+        InstanceAccessor<&PCRE2::DotAll>("dotAll"),
+        InstanceAccessor<&PCRE2::Global>("global"),
         // InstanceAccessor<&PCRE2::HasIndices>("hasIndices"),
-        // InstanceAccessor<&PCRE2::IgnoreCase>("ignoreCase"),
-        // InstanceAccessor<&PCRE2::Multiline>("multiline"),
-        // InstanceAccessor<&PCRE2::Sticky>("sticky"),
-        // InstanceAccessor<&PCRE2::Unicode>("unicode"),
-        // InstanceAccessor<&PCRE2::UnicodeSets>("unicodeSets"),
+        InstanceAccessor<&PCRE2::IgnoreCase>("ignoreCase"),
+        InstanceAccessor<&PCRE2::Multiline>("multiline"),
+        InstanceAccessor<&PCRE2::Sticky>("sticky"),
+        InstanceAccessor<&PCRE2::Unicode>("unicode"),
     });
 
     instanceData->PCRE2 = Napi::Persistent(func);
@@ -136,8 +137,7 @@ PCRE2::PCRE2(const Napi::CallbackInfo &info)
     m_re = pcre2_compile(
         reinterpret_cast<PCRE2_SPTR>(m_pattern.c_str()),
         m_pattern.size(),
-        // TODO Convert flags to PCRE2 options
-        0,
+        m_options,
         &errornumber,
         &erroroffset,
         nullptr
@@ -185,7 +185,7 @@ Napi::Value PCRE2::Exec(const Napi::CallbackInfo &info)
         reinterpret_cast<PCRE2_SPTR>(subjectStr.c_str()),
         subjectStr.length(),
         m_lastIndex,
-        0,
+        m_sticky ? PCRE2_ANCHORED : 0,
         m_matchData,
         nullptr
     );
@@ -246,7 +246,7 @@ Napi::Value PCRE2::Exec(const Napi::CallbackInfo &info)
         result["groups"] = info.Env().Undefined();
     }
 
-    if (m_global) {
+    if (m_global || m_sticky) {
         m_lastIndex = ovector[1];
     }
 
@@ -287,6 +287,14 @@ Napi::Value PCRE2::Test(const Napi::CallbackInfo &info)
     return Napi::Boolean::New(info.Env(), true);
 }
 
+// TODO There is no standard way to convert utf-16 to utf-8 and no support for formatting u16string....
+// Napi::Value PCRE2::ToString(const Napi::CallbackInfo &info)
+// {
+//     std::ostringstream oss;
+//     oss << "pcre2`" << m_source << "`";
+//     return Napi::String::New(info.Env(), oss.str());
+// }
+
 Napi::Value PCRE2::GetLastIndex(const Napi::CallbackInfo &info)
 {
     return Napi::Number::New(info.Env(), m_lastIndex);
@@ -301,15 +309,40 @@ void PCRE2::SetLastIndex(const Napi::CallbackInfo &info, const Napi::Value &valu
     m_lastIndex = value.As<Napi::Number>().Int64Value();
 }
 
-// TODO There is no standard way to convert utf-16 to utf-8 and no support for formatting u16string....
-// Napi::Value PCRE2::ToString(const Napi::CallbackInfo &info)
-// {
-//     std::ostringstream oss;
-//     oss << "pcre2`" << m_source << "`";
-//     return Napi::String::New(info.Env(), oss.str());
-// }
+void PCRE2::ParseFlags(Napi::Env env, const std::string &flags)
+{
+    for (char flag : flags) {
+        switch (flag) {
+            case 'd':
+                // TODO
+                break;
+            case 'g':
+                m_global = true;
+                break;
+            case 'i':
+                m_options |= PCRE2_CASELESS;
+                break;
+            case 'm':
+                m_options |= PCRE2_MULTILINE;
+                break;
+            case 's':
+                m_options |= PCRE2_DOTALL;
+                break;
+            case 'u':
+            case 'v':
+                m_options |= PCRE2_UTF;
+                break;
+            case 'y':
+                m_sticky = true;
+                break;
+            default:
+                throw Napi::Error::New(env, "Unsupported flag: " + std::string{flag});
+        }
+    }
+}
 
-size_t PCRE2::PatternSize(Napi::Env env) const {
+size_t PCRE2::PatternSize(Napi::Env env) const
+{
     size_t size;
     int rc = pcre2_pattern_info(m_re, PCRE2_INFO_SIZE, &size);
     if (rc < 0) {
@@ -335,6 +368,36 @@ Napi::Value PCRE2::Source(const Napi::CallbackInfo &info) {
 
 Napi::Value PCRE2::Flags(const Napi::CallbackInfo &info) {
     return Napi::String::New(info.Env(), m_flags);
+}
+
+Napi::Value PCRE2::DotAll(const Napi::CallbackInfo &info)
+{
+    return Napi::Boolean::New(info.Env(), m_options & PCRE2_DOTALL);
+}
+
+Napi::Value PCRE2::Global(const Napi::CallbackInfo &info)
+{
+    return Napi::Boolean::New(info.Env(), m_global);
+}
+
+Napi::Value PCRE2::IgnoreCase(const Napi::CallbackInfo &info)
+{
+    return Napi::Boolean::New(info.Env(), m_options & PCRE2_CASELESS);
+}
+
+Napi::Value PCRE2::Multiline(const Napi::CallbackInfo &info)
+{
+    return Napi::Boolean::New(info.Env(), m_options & PCRE2_MULTILINE);
+}
+
+Napi::Value PCRE2::Sticky(const Napi::CallbackInfo &info)
+{
+    return Napi::Boolean::New(info.Env(), m_sticky);
+}
+
+Napi::Value PCRE2::Unicode(const Napi::CallbackInfo &info)
+{
+    return Napi::Boolean::New(info.Env(), m_options & PCRE2_UTF);
 }
 
 static Napi::Object Init(Napi::Env env, Napi::Object exports) {
