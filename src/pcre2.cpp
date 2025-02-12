@@ -104,6 +104,8 @@ Napi::Object PCRE2::Init(Napi::Env env, Napi::Object exports) {
         InstanceAccessor<&PCRE2::Multiline>("multiline"),
         InstanceAccessor<&PCRE2::Sticky>("sticky"),
         InstanceAccessor<&PCRE2::Unicode>("unicode"),
+        // TODO What to do about this one? This is a dialect flag for JS regexp that doesn't apply to PCRE2 syntax
+        // InstanceAccessor<&PCRE2::Unicode>("unicodeSets"),
         // StaticMethod<&PCRE2::Split>(symbol.Get("species").As<Napi::Symbol>()),
     });
 
@@ -503,6 +505,8 @@ Napi::Value PCRE2::Unicode(const Napi::CallbackInfo &info)
 static Napi::Object Init(Napi::Env env, Napi::Object exports) {
     env.SetInstanceData(new InstanceData(env));
     PCRE2::Init(env, exports);
+    exports["PCRE2_MAJOR"] = PCRE2_MAJOR;
+    exports["PCRE2_MINOR"] = PCRE2_MINOR;
     return exports;
 }
 

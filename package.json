@@ -14,7 +14,7 @@
   "scripts": {
     "install": "prebuild-install -r napi || cmake-js compile",
     "compile": "cmake-js compile",
-    "build": "tsc && cmake-js build",
+    "build": "tsc -b && cmake-js build",
     "prebuild": "prebuild --backend cmake-js -r napi -t 8",
     "type-check": "tsc -b --noEmit",
     "lint": "eslint",
