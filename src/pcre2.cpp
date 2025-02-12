@@ -6,10 +6,12 @@ class InstanceData {
 public:
     explicit InstanceData(Napi::Env env);
 
-    virtual ~InstanceData() {}
+    virtual ~InstanceData();
 
     InstanceData(const InstanceData&) = delete;
     InstanceData& operator=(const InstanceData&) = delete;
+
+    pcre2_compile_context *compileContext;
 
     Napi::FunctionReference RegExp;
     Napi::FunctionReference ObjectCreate;
@@ -19,9 +21,16 @@ public:
 };
 
 InstanceData::InstanceData(Napi::Env env) {
+    compileContext = pcre2_compile_context_create(nullptr);
+    pcre2_set_newline(compileContext, PCRE2_NEWLINE_ANYCRLF);
+
     RegExp = Napi::Persistent(env.Global().Get("RegExp").As<Napi::Function>());
     ObjectCreate = Napi::Persistent(env.Global().Get("Object").As<Napi::Object>().Get("create").As<Napi::Function>());
     ArrayPush = Napi::Persistent(env.Global().Get("Array").As<Napi::Function>().Get("prototype").As<Napi::Object>().Get("push").As<Napi::Function>());
+}
+
+InstanceData::~InstanceData() {
+    pcre2_compile_context_free(compileContext);
 }
 
 class PCRE2 : public Napi::ObjectWrap<PCRE2> {
@@ -159,7 +168,7 @@ PCRE2::PCRE2(const Napi::CallbackInfo &info)
         m_options,
         &errornumber,
         &erroroffset,
-        nullptr
+        instanceData->compileContext
     );
     if (m_re == nullptr) {
         PCRE2_UCHAR buffer[256];

@@ -8,7 +8,6 @@ add_compile_definitions(NAPI_VERSION=${napi_build_version})
 
 set(PCRE2_BUILD_PCRE2_16 ON)
 set(PCRE2_SUPPORT_JIT ON)
-set(PCRE2_NEWLINE ANYCRLF)
 set(PCRE2_STATIC_PIC ON)
 add_subdirectory(pcre2)
 
