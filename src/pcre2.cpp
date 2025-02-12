@@ -45,6 +45,7 @@ private:
     Napi::Value Flags(const Napi::CallbackInfo &info);
     Napi::Value DotAll(const Napi::CallbackInfo &info);
     Napi::Value Global(const Napi::CallbackInfo &info);
+    Napi::Value HasIndices(const Napi::CallbackInfo &info);
     Napi::Value IgnoreCase(const Napi::CallbackInfo &info);
     Napi::Value Multiline(const Napi::CallbackInfo &info);
     Napi::Value Sticky(const Napi::CallbackInfo &info);
@@ -81,7 +82,7 @@ Napi::Object PCRE2::Init(Napi::Env env, Napi::Object exports) {
         // InstanceMethod<&PCRE2::ToString>(Napi::Symbol::For(env, "nodejs.util.inspect.custom")),
         InstanceMethod<&PCRE2::Match>(symbol.Get("match").As<Napi::Symbol>()),
         // InstanceMethod<&PCRE2::MatchAll>(symbol["matchAll"]),
-        // InstanceMethod<&PCRE2::Replace>(symbol["replace"]),
+        // InstanceMethod<&PCRE2::Replace>(symbol["replace"]), // This one can be troublesome as pcre2_substitute doesn't handle dynamic replacement by the callout
         // InstanceMethod<&PCRE2::Search>(symbol["search"]),
         // InstanceMethod<&PCRE2::Split>(symbol["split"]),
         InstanceAccessor<&PCRE2::GetLastIndex, &PCRE2::SetLastIndex>("lastIndex"),
@@ -89,11 +90,12 @@ Napi::Object PCRE2::Init(Napi::Env env, Napi::Object exports) {
         InstanceAccessor<&PCRE2::Flags>("flags"),
         InstanceAccessor<&PCRE2::DotAll>("dotAll"),
         InstanceAccessor<&PCRE2::Global>("global"),
-        // InstanceAccessor<&PCRE2::HasIndices>("hasIndices"),
+        InstanceAccessor<&PCRE2::HasIndices>("hasIndices"),
         InstanceAccessor<&PCRE2::IgnoreCase>("ignoreCase"),
         InstanceAccessor<&PCRE2::Multiline>("multiline"),
         InstanceAccessor<&PCRE2::Sticky>("sticky"),
         InstanceAccessor<&PCRE2::Unicode>("unicode"),
+        // StaticMethod<&PCRE2::Split>(symbol.Get("species").As<Napi::Symbol>()),
     });
 
     instanceData->PCRE2 = Napi::Persistent(func);
@@ -227,10 +229,23 @@ Napi::Value PCRE2::ExecImpl(Napi::Env env, const Napi::String &subject)
     PCRE2_SIZE *ovector = pcre2_get_ovector_pointer(m_matchData);
     Napi::Array result = Napi::Array::New(env, rc);
 
+    Napi::Array indices;
+    if (m_hasIndices) {
+        indices = Napi::Array::New(env, rc);
+        result["indices"] = indices;
+    }
+
     for (PCRE2_SIZE i = 0; i < rc; i++) {
         const char16_t *substring_start = subjectStr.c_str() + ovector[2*i];
         PCRE2_SIZE substring_length = ovector[2*i+1] - ovector[2*i];
         result[i] = Napi::String::New(env, substring_start, substring_length);
+
+        if (m_hasIndices) {
+            Napi::Array indice = Napi::Array::New(env, 2);
+            indice[0u] = ovector[2*i];
+            indice[1] = ovector[2*i+1];
+            indices[i] = indice;
+        }
     }
 
     result["index"] = ovector[0];
@@ -256,13 +271,29 @@ Napi::Value PCRE2::ExecImpl(Napi::Env env, const Napi::String &subject)
             &nameEntrySize);
 
         Napi::Object groups = instanceData->ObjectCreate.Call({ env.Null() }).As<Napi::Object>();
+
+        Napi::Object groupsIndices;
+        if (m_hasIndices) {
+            groupsIndices = instanceData->ObjectCreate.Call({ env.Null() }).As<Napi::Object>();
+            indices["groups"] = groupsIndices;
+        }
+
         PCRE2_SPTR tabptr = nameTable;
         for (uint32_t i = 0; i < nameCount; i++) {
+            Napi::String groupName = Napi::String::New(env, reinterpret_cast<const char16_t*>(tabptr + 1), nameEntrySize - 2);
+
             int n = tabptr[0];
             groups.Set(
-                Napi::String::New(env, reinterpret_cast<const char16_t*>(tabptr + 1), nameEntrySize - 2),
+                groupName,
                 Napi::String::New(env, subjectStr.c_str() + ovector[2*n], ovector[2*n+1] - ovector[2*n]));
             tabptr += nameEntrySize;
+
+            if (m_hasIndices) {
+                Napi::Array indice = Napi::Array::New(env, 2);
+                indice[0u] = ovector[2*n];
+                indice[1] = ovector[2*n+1];
+                groupsIndices.Set(groupName, indice);
+            }
         }
 
         result["groups"] = groups;
@@ -433,6 +464,11 @@ Napi::Value PCRE2::DotAll(const Napi::CallbackInfo &info)
 Napi::Value PCRE2::Global(const Napi::CallbackInfo &info)
 {
     return Napi::Boolean::New(info.Env(), m_global);
+}
+
+Napi::Value PCRE2::HasIndices(const Napi::CallbackInfo &info)
+{
+    return Napi::Boolean::New(info.Env(), m_hasIndices);
 }
 
 Napi::Value PCRE2::IgnoreCase(const Napi::CallbackInfo &info)
