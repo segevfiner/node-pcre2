@@ -12,12 +12,14 @@ public:
     InstanceData& operator=(const InstanceData&) = delete;
 
     Napi::FunctionReference RegExp;
+    Napi::FunctionReference ObjectCreate;
 
     Napi::FunctionReference PCRE2;
 };
 
 InstanceData::InstanceData(Napi::Env env) {
     RegExp = Napi::Persistent(env.Global().Get("RegExp").As<Napi::Function>());
+    ObjectCreate = Napi::Persistent(env.Global().Get("Object").As<Napi::Object>().Get("create").As<Napi::Function>());
 }
 
 class PCRE2 : public Napi::ObjectWrap<PCRE2> {
@@ -30,17 +32,25 @@ public:
     PCRE2& operator=(const PCRE2&) = delete;
 
 private:
+    Napi::Value Exec(const Napi::CallbackInfo &info);
     Napi::Value Test(const Napi::CallbackInfo &info);
     Napi::Value ToString(const Napi::CallbackInfo &info);
+    Napi::Value GetLastIndex(const Napi::CallbackInfo &info);
+    void SetLastIndex(const Napi::CallbackInfo &info, const Napi::Value &value);
     Napi::Value Source(const Napi::CallbackInfo &info);
     Napi::Value Flags(const Napi::CallbackInfo &info);
 
     size_t PatternSize(Napi::Env env) const;
 
+    void TierUpTick();
+
     std::u16string m_pattern;
     std::string m_flags;
+    bool m_global;
     pcre2_code *m_re;
-    pcre2_match_data *m_match_data;
+    pcre2_match_data *m_matchData;
+    size_t m_lastIndex;
+    int m_tierUpTicks;
     size_t m_size;
 };
 
@@ -49,7 +59,7 @@ Napi::Object PCRE2::Init(Napi::Env env, Napi::Object exports) {
 
     Napi::Object symbol = env.Global().Get("Symbol").As<Napi::Object>();
     Napi::Function func = DefineClass(env, "PCRE2", {
-        // InstanceMethod<&PCRE2::Exec>("exec"),
+        InstanceMethod<&PCRE2::Exec>("exec"),
         InstanceMethod<&PCRE2::Test>("test"),
         // TODO There is no standard way to convert utf-16 to utf-8 and no support for formatting u16string....
         //  Also need to decide on the correct format for the string representation
@@ -60,7 +70,7 @@ Napi::Object PCRE2::Init(Napi::Env env, Napi::Object exports) {
         // InstanceMethod<&PCRE2::Replace>(symbol["replace"]),
         // InstanceMethod<&PCRE2::Search>(symbol["search"]),
         // InstanceMethod<&PCRE2::Split>(symbol["split"]),
-        // InstanceAccessor<&PCRE2::LastIndex>("lastIndex"),
+        InstanceAccessor<&PCRE2::GetLastIndex, &PCRE2::SetLastIndex>("lastIndex"),
         InstanceAccessor<&PCRE2::Source>("source"),
         InstanceAccessor<&PCRE2::Flags>("flags"),
         // InstanceAccessor<&PCRE2::DotAll>("dotAll"),
@@ -81,6 +91,9 @@ Napi::Object PCRE2::Init(Napi::Env env, Napi::Object exports) {
 
 PCRE2::PCRE2(const Napi::CallbackInfo &info)
     : Napi::ObjectWrap<PCRE2>(info)
+    , m_global(false)
+    , m_tierUpTicks(1)
+    , m_lastIndex(0)
 {
     InstanceData *instanceData = info.Env().GetInstanceData<InstanceData>();
 
@@ -137,20 +150,107 @@ PCRE2::PCRE2(const Napi::CallbackInfo &info)
         throw Napi::Error::New(info.Env(), oss.str());
     }
 
-    m_match_data = pcre2_match_data_create_from_pattern(m_re, nullptr);
-    if (m_match_data == nullptr) {
+    m_matchData = pcre2_match_data_create_from_pattern(m_re, nullptr);
+    if (m_matchData == nullptr) {
         pcre2_code_free(m_re);
         throw Napi::Error::New(info.Env(), "PCRE2 match data allocation failed");
     }
 
-    m_size = (m_pattern.size() * sizeof(char16_t)) + PatternSize(info.Env()) + pcre2_get_match_data_size(m_match_data);
+    m_size = (m_pattern.size() * sizeof(char16_t)) + PatternSize(info.Env()) + pcre2_get_match_data_size(m_matchData);
     Napi::MemoryManagement::AdjustExternalMemory(info.Env(), m_size);
 }
 
 PCRE2::~PCRE2() {
-    pcre2_match_data_free(m_match_data);
+    pcre2_match_data_free(m_matchData);
     pcre2_code_free(m_re);
     Napi::MemoryManagement::AdjustExternalMemory(Env(), -m_size);
+}
+
+Napi::Value PCRE2::Exec(const Napi::CallbackInfo &info)
+{
+    InstanceData *instanceData = info.Env().GetInstanceData<InstanceData>();
+
+    if (info.Length() < 1) {
+        throw Napi::TypeError::New(info.Env(), "Wrong number of arguments");
+    }
+    if (!info[0].IsString()) {
+        throw Napi::TypeError::New(info.Env(), "Expected a string");
+    }
+
+    std::u16string subjectStr = info[0].As<Napi::String>().Utf16Value();
+
+    TierUpTick();
+    int rc = pcre2_match(
+        m_re,
+        reinterpret_cast<PCRE2_SPTR>(subjectStr.c_str()),
+        subjectStr.length(),
+        m_lastIndex,
+        0,
+        m_matchData,
+        nullptr
+    );
+    if (rc < 0) {
+        if (rc == PCRE2_ERROR_NOMATCH) {
+            m_lastIndex = 0;
+            return info.Env().Null();
+        }
+
+        std::ostringstream oss;
+        oss << "PCRE2 matching error: " << rc;
+        throw Napi::Error::New(info.Env(), oss.str());
+    }
+
+    PCRE2_SIZE *ovector = pcre2_get_ovector_pointer(m_matchData);
+    Napi::Array result = Napi::Array::New(info.Env(), rc);
+
+    for (PCRE2_SIZE i = 0; i < rc; i++) {
+        const char16_t *substring_start = subjectStr.c_str() + ovector[2*i];
+        PCRE2_SIZE substring_length = ovector[2*i+1] - ovector[2*i];
+        result[i] = Napi::String::New(info.Env(), substring_start, substring_length);
+    }
+
+    result["index"] = ovector[0];
+    result["input"] = info[0];
+
+    uint32_t nameCount;
+    pcre2_pattern_info(
+        m_re,
+        PCRE2_INFO_NAMECOUNT,
+        &nameCount);
+
+    if (nameCount > 0) {
+        PCRE2_SPTR nameTable;
+        pcre2_pattern_info(
+            m_re,
+            PCRE2_INFO_NAMETABLE,
+            &nameTable);
+
+        uint32_t nameEntrySize;
+        pcre2_pattern_info(
+            m_re,
+            PCRE2_INFO_NAMEENTRYSIZE,
+            &nameEntrySize);
+
+        Napi::Object groups = instanceData->ObjectCreate.Call({ info.Env().Null() }).As<Napi::Object>();
+        PCRE2_SPTR tabptr = nameTable;
+        for (uint32_t i = 0; i < nameCount; i++) {
+            int n = tabptr[0];
+            groups.Set(
+                Napi::String::New(info.Env(), reinterpret_cast<const char16_t*>(tabptr + 1), nameEntrySize - 2),
+                Napi::String::New(info.Env(), subjectStr.c_str() + ovector[2*n], ovector[2*n+1] - ovector[2*n]));
+            tabptr += nameEntrySize;
+        }
+
+        result["groups"] = groups;
+    } else {
+        result["groups"] = info.Env().Undefined();
+    }
+
+    if (m_global) {
+        m_lastIndex = ovector[1];
+    }
+
+    return result;
 }
 
 Napi::Value PCRE2::Test(const Napi::CallbackInfo &info)
@@ -164,26 +264,41 @@ Napi::Value PCRE2::Test(const Napi::CallbackInfo &info)
 
     std::u16string subjectStr = info[0].As<Napi::String>().Utf16Value();
 
+    TierUpTick();
     int rc = pcre2_match(
         m_re,
         reinterpret_cast<PCRE2_SPTR>(subjectStr.c_str()),
         subjectStr.length(),
         0,
         0,
-        m_match_data,
+        m_matchData,
         nullptr
     );
     if (rc < 0) {
         if (rc == PCRE2_ERROR_NOMATCH) {
             return Napi::Boolean::New(info.Env(), false);
-        } else {
-            std::ostringstream oss;
-            oss << "PCRE2 matching error: " << rc;
-            throw Napi::Error::New(info.Env(), oss.str());
         }
+
+        std::ostringstream oss;
+        oss << "PCRE2 matching error: " << rc;
+        throw Napi::Error::New(info.Env(), oss.str());
     }
 
     return Napi::Boolean::New(info.Env(), true);
+}
+
+Napi::Value PCRE2::GetLastIndex(const Napi::CallbackInfo &info)
+{
+    return Napi::Number::New(info.Env(), m_lastIndex);
+}
+
+void PCRE2::SetLastIndex(const Napi::CallbackInfo &info, const Napi::Value &value)
+{
+    if (!value.IsNumber()) {
+        throw Napi::TypeError::New(info.Env(), "Expected a number");
+    }
+
+    m_lastIndex = value.As<Napi::Number>().Int64Value();
 }
 
 // TODO There is no standard way to convert utf-16 to utf-8 and no support for formatting u16string....
@@ -204,6 +319,14 @@ size_t PCRE2::PatternSize(Napi::Env env) const {
     }
 
     return size;
+}
+
+void PCRE2::TierUpTick() {
+    if (m_tierUpTicks > 0) {
+        if (m_tierUpTicks--) {
+            pcre2_jit_compile(m_re, PCRE2_JIT_COMPLETE);
+        }
+    }
 }
 
 Napi::Value PCRE2::Source(const Napi::CallbackInfo &info) {
