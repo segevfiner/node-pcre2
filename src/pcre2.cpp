@@ -13,6 +13,7 @@ public:
 
     Napi::FunctionReference RegExp;
     Napi::FunctionReference ObjectCreate;
+    Napi::FunctionReference ArrayPush;
 
     Napi::FunctionReference PCRE2;
 };
@@ -20,6 +21,7 @@ public:
 InstanceData::InstanceData(Napi::Env env) {
     RegExp = Napi::Persistent(env.Global().Get("RegExp").As<Napi::Function>());
     ObjectCreate = Napi::Persistent(env.Global().Get("Object").As<Napi::Object>().Get("create").As<Napi::Function>());
+    ArrayPush = Napi::Persistent(env.Global().Get("Array").As<Napi::Function>().Get("prototype").As<Napi::Object>().Get("push").As<Napi::Function>());
 }
 
 class PCRE2 : public Napi::ObjectWrap<PCRE2> {
@@ -33,13 +35,22 @@ public:
 
 private:
     Napi::Value Exec(const Napi::CallbackInfo &info);
+    Napi::Value ExecImpl(Napi::Env env, const Napi::String &subject);
     Napi::Value Test(const Napi::CallbackInfo &info);
     Napi::Value ToString(const Napi::CallbackInfo &info);
+    Napi::Value Match(const Napi::CallbackInfo &info);
     Napi::Value GetLastIndex(const Napi::CallbackInfo &info);
     void SetLastIndex(const Napi::CallbackInfo &info, const Napi::Value &value);
     Napi::Value Source(const Napi::CallbackInfo &info);
     Napi::Value Flags(const Napi::CallbackInfo &info);
+    Napi::Value DotAll(const Napi::CallbackInfo &info);
+    Napi::Value Global(const Napi::CallbackInfo &info);
+    Napi::Value IgnoreCase(const Napi::CallbackInfo &info);
+    Napi::Value Multiline(const Napi::CallbackInfo &info);
+    Napi::Value Sticky(const Napi::CallbackInfo &info);
+    Napi::Value Unicode(const Napi::CallbackInfo &info);
 
+    void ParseFlags(Napi::Env env, const std::string &flags);
     size_t PatternSize(Napi::Env env) const;
 
     void TierUpTick();
@@ -49,6 +60,7 @@ private:
     uint32_t m_options;
     bool m_global;
     bool m_sticky;
+    bool m_hasIndices;
     pcre2_code *m_re;
     pcre2_match_data *m_matchData;
     size_t m_lastIndex;
@@ -67,7 +79,7 @@ Napi::Object PCRE2::Init(Napi::Env env, Napi::Object exports) {
         //  Also need to decide on the correct format for the string representation
         // InstanceMethod<&PCRE2::ToString>("toString"),
         // InstanceMethod<&PCRE2::ToString>(Napi::Symbol::For(env, "nodejs.util.inspect.custom")),
-        // InstanceMethod<&PCRE2::Match>(symbol["match"]),
+        InstanceMethod<&PCRE2::Match>(symbol.Get("match").As<Napi::Symbol>()),
         // InstanceMethod<&PCRE2::MatchAll>(symbol["matchAll"]),
         // InstanceMethod<&PCRE2::Replace>(symbol["replace"]),
         // InstanceMethod<&PCRE2::Search>(symbol["search"]),
@@ -92,9 +104,12 @@ Napi::Object PCRE2::Init(Napi::Env env, Napi::Object exports) {
 
 PCRE2::PCRE2(const Napi::CallbackInfo &info)
     : Napi::ObjectWrap<PCRE2>(info)
+    , m_options(0)
     , m_global(false)
-    , m_tierUpTicks(1)
+    , m_sticky(false)
+    , m_hasIndices(false)
     , m_lastIndex(0)
+    , m_tierUpTicks(1)
 {
     InstanceData *instanceData = info.Env().GetInstanceData<InstanceData>();
 
@@ -132,6 +147,8 @@ PCRE2::PCRE2(const Napi::CallbackInfo &info)
         m_flags = info[1].As<Napi::String>().Utf8Value();
     }
 
+    ParseFlags(info.Env(), m_flags);
+
     int errornumber;
     size_t erroroffset;
     m_re = pcre2_compile(
@@ -168,8 +185,6 @@ PCRE2::~PCRE2() {
 
 Napi::Value PCRE2::Exec(const Napi::CallbackInfo &info)
 {
-    InstanceData *instanceData = info.Env().GetInstanceData<InstanceData>();
-
     if (info.Length() < 1) {
         throw Napi::TypeError::New(info.Env(), "Wrong number of arguments");
     }
@@ -177,7 +192,16 @@ Napi::Value PCRE2::Exec(const Napi::CallbackInfo &info)
         throw Napi::TypeError::New(info.Env(), "Expected a string");
     }
 
-    std::u16string subjectStr = info[0].As<Napi::String>().Utf16Value();
+    return ExecImpl(info.Env(), info[0].As<Napi::String>());
+}
+
+Napi::Value PCRE2::ExecImpl(Napi::Env env, const Napi::String &subject)
+{
+    InstanceData *instanceData = env.GetInstanceData<InstanceData>();
+
+    std::u16string subjectStr = subject.Utf16Value();
+
+    Napi::EscapableHandleScope scope(env);
 
     TierUpTick();
     int rc = pcre2_match(
@@ -192,25 +216,25 @@ Napi::Value PCRE2::Exec(const Napi::CallbackInfo &info)
     if (rc < 0) {
         if (rc == PCRE2_ERROR_NOMATCH) {
             m_lastIndex = 0;
-            return info.Env().Null();
+            return env.Null();
         }
 
         std::ostringstream oss;
         oss << "PCRE2 matching error: " << rc;
-        throw Napi::Error::New(info.Env(), oss.str());
+        throw Napi::Error::New(env, oss.str());
     }
 
     PCRE2_SIZE *ovector = pcre2_get_ovector_pointer(m_matchData);
-    Napi::Array result = Napi::Array::New(info.Env(), rc);
+    Napi::Array result = Napi::Array::New(env, rc);
 
     for (PCRE2_SIZE i = 0; i < rc; i++) {
         const char16_t *substring_start = subjectStr.c_str() + ovector[2*i];
         PCRE2_SIZE substring_length = ovector[2*i+1] - ovector[2*i];
-        result[i] = Napi::String::New(info.Env(), substring_start, substring_length);
+        result[i] = Napi::String::New(env, substring_start, substring_length);
     }
 
     result["index"] = ovector[0];
-    result["input"] = info[0];
+    result["input"] = subject;
 
     uint32_t nameCount;
     pcre2_pattern_info(
@@ -231,26 +255,26 @@ Napi::Value PCRE2::Exec(const Napi::CallbackInfo &info)
             PCRE2_INFO_NAMEENTRYSIZE,
             &nameEntrySize);
 
-        Napi::Object groups = instanceData->ObjectCreate.Call({ info.Env().Null() }).As<Napi::Object>();
+        Napi::Object groups = instanceData->ObjectCreate.Call({ env.Null() }).As<Napi::Object>();
         PCRE2_SPTR tabptr = nameTable;
         for (uint32_t i = 0; i < nameCount; i++) {
             int n = tabptr[0];
             groups.Set(
-                Napi::String::New(info.Env(), reinterpret_cast<const char16_t*>(tabptr + 1), nameEntrySize - 2),
-                Napi::String::New(info.Env(), subjectStr.c_str() + ovector[2*n], ovector[2*n+1] - ovector[2*n]));
+                Napi::String::New(env, reinterpret_cast<const char16_t*>(tabptr + 1), nameEntrySize - 2),
+                Napi::String::New(env, subjectStr.c_str() + ovector[2*n], ovector[2*n+1] - ovector[2*n]));
             tabptr += nameEntrySize;
         }
 
         result["groups"] = groups;
     } else {
-        result["groups"] = info.Env().Undefined();
+        result["groups"] = env.Undefined();
     }
 
     if (m_global || m_sticky) {
         m_lastIndex = ovector[1];
     }
 
-    return result;
+    return scope.Escape(result);
 }
 
 Napi::Value PCRE2::Test(const Napi::CallbackInfo &info)
@@ -295,6 +319,37 @@ Napi::Value PCRE2::Test(const Napi::CallbackInfo &info)
 //     return Napi::String::New(info.Env(), oss.str());
 // }
 
+Napi::Value PCRE2::Match(const Napi::CallbackInfo &info)
+{
+    InstanceData *instanceData = info.Env().GetInstanceData<InstanceData>();
+
+    if (info.Length() < 1) {
+        throw Napi::TypeError::New(info.Env(), "Wrong number of arguments");
+    }
+    if (!info[0].IsString()) {
+        throw Napi::TypeError::New(info.Env(), "Expected a string");
+    }
+
+    if (!m_global) {
+        return ExecImpl(info.Env(), info[0].As<Napi::String>()).As<Napi::Object>();
+    }
+
+    Napi::Array result = Napi::Array::New(info.Env());
+    for (uint32_t i; ; i++) {
+        Napi::Value match = ExecImpl(info.Env(), info[0].As<Napi::String>()).As<Napi::Object>();
+        if (match.IsNull()) {
+            break;
+        }
+
+        // TODO Handle zero length matches
+
+        instanceData->ArrayPush.Call(result, { match.As<Napi::Array>().Get(0u) });
+    }
+
+
+    return result;
+}
+
 Napi::Value PCRE2::GetLastIndex(const Napi::CallbackInfo &info)
 {
     return Napi::Number::New(info.Env(), m_lastIndex);
@@ -314,7 +369,7 @@ void PCRE2::ParseFlags(Napi::Env env, const std::string &flags)
     for (char flag : flags) {
         switch (flag) {
             case 'd':
-                // TODO
+                m_hasIndices = true;
                 break;
             case 'g':
                 m_global = true;
