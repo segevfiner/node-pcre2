@@ -13,6 +13,7 @@ public:
 
     pcre2_compile_context *compileContext;
 
+    Napi::ObjectReference Symbol;
     Napi::FunctionReference RegExp;
     Napi::FunctionReference ObjectCreate;
     Napi::FunctionReference ArrayPush;
@@ -25,6 +26,7 @@ InstanceData::InstanceData(Napi::Env env) {
     pcre2_set_newline(compileContext, PCRE2_NEWLINE_ANYCRLF);
     pcre2_set_compile_extra_options(compileContext, PCRE2_EXTRA_ALT_BSUX);
 
+    Symbol = Napi::Persistent(env.Global().Get("Symbol").As<Napi::Object>());
     RegExp = Napi::Persistent(env.Global().Get("RegExp").As<Napi::Function>());
     ObjectCreate = Napi::Persistent(env.Global().Get("Object").As<Napi::Object>().Get("create").As<Napi::Function>());
     ArrayPush = Napi::Persistent(env.Global().Get("Array").As<Napi::Function>().Get("prototype").As<Napi::Object>().Get("push").As<Napi::Function>());
@@ -62,10 +64,12 @@ private:
     Napi::Value Unicode(const Napi::CallbackInfo &info);
     Napi::Value UnicodeSets(const Napi::CallbackInfo &info);
 
+    static Napi::Value Species(const Napi::CallbackInfo &info);
+
     void ParseFlags(Napi::Env env, const std::string &flags);
     size_t PatternSize(Napi::Env env) const;
 
-    void TierUpTick();
+    void TierUpTick(Napi::Env env);
 
     std::u16string m_pattern;
     std::string m_flags;
@@ -83,7 +87,6 @@ private:
 Napi::Object PCRE2::Init(Napi::Env env, Napi::Object exports) {
     InstanceData *instanceData = env.GetInstanceData<InstanceData>();
 
-    Napi::Object symbol = env.Global().Get("Symbol").As<Napi::Object>();
     Napi::Function func = DefineClass(env, "PCRE2", {
         InstanceMethod<&PCRE2::Exec>("exec"),
         InstanceMethod<&PCRE2::Test>("test"),
@@ -91,7 +94,7 @@ Napi::Object PCRE2::Init(Napi::Env env, Napi::Object exports) {
         //  Also need to decide on the correct format for the string representation
         // InstanceMethod<&PCRE2::ToString>("toString"),
         // InstanceMethod<&PCRE2::ToString>(Napi::Symbol::For(env, "nodejs.util.inspect.custom")),
-        InstanceMethod<&PCRE2::Match>(symbol.Get("match").As<Napi::Symbol>()),
+        InstanceMethod<&PCRE2::Match>(instanceData->Symbol.Get("match").As<Napi::Symbol>()),
         // InstanceMethod<&PCRE2::MatchAll>(symbol["matchAll"]),
         // InstanceMethod<&PCRE2::Replace>(symbol["replace"]), // This one can be troublesome as pcre2_substitute doesn't handle dynamic replacement by the callout
         // InstanceMethod<&PCRE2::Search>(symbol["search"]),
@@ -107,7 +110,7 @@ Napi::Object PCRE2::Init(Napi::Env env, Napi::Object exports) {
         InstanceAccessor<&PCRE2::Sticky>("sticky"),
         InstanceAccessor<&PCRE2::Unicode>("unicode"),
         InstanceAccessor<&PCRE2::UnicodeSets>("unicodeSets"),
-        // StaticMethod<&PCRE2::Species>(symbol.Get("species").As<Napi::Symbol>()),
+        StaticMethod<&PCRE2::Species>(instanceData->Symbol.Get("species").As<Napi::Symbol>()),
     });
 
     instanceData->PCRE2 = Napi::Persistent(func);
@@ -217,7 +220,7 @@ Napi::Value PCRE2::ExecImpl(Napi::Env env, const Napi::String &subject)
 
     Napi::EscapableHandleScope scope(env);
 
-    TierUpTick();
+    TierUpTick(env);
     int rc = pcre2_match(
         m_re,
         reinterpret_cast<PCRE2_SPTR>(subjectStr.c_str()),
@@ -331,7 +334,7 @@ Napi::Value PCRE2::Test(const Napi::CallbackInfo &info)
 
     std::u16string subjectStr = info[0].As<Napi::String>().Utf16Value();
 
-    TierUpTick();
+    TierUpTick(info.Env());
     int rc = pcre2_match(
         m_re,
         reinterpret_cast<PCRE2_SPTR>(subjectStr.c_str()),
@@ -454,10 +457,22 @@ size_t PCRE2::PatternSize(Napi::Env env) const
     return size;
 }
 
-void PCRE2::TierUpTick() {
+void PCRE2::TierUpTick(Napi::Env env) {
     if (m_tierUpTicks > 0) {
         if (m_tierUpTicks--) {
             pcre2_jit_compile(m_re, PCRE2_JIT_COMPLETE);
+
+            size_t jitSize;
+            pcre2_pattern_info(
+                m_re,
+                PCRE2_INFO_JITSIZE,
+                &jitSize
+            );
+
+            if (jitSize != 0) {
+                m_size += jitSize;
+                Napi::MemoryManagement::AdjustExternalMemory(env, jitSize);
+            }
         }
     }
 }
@@ -508,6 +523,12 @@ Napi::Value PCRE2::Unicode(const Napi::CallbackInfo &info)
 Napi::Value PCRE2::UnicodeSets(const Napi::CallbackInfo &info)
 {
     return Napi::Boolean::New(info.Env(), m_options & PCRE2_ALT_EXTENDED_CLASS);
+}
+
+Napi::Value PCRE2::Species(const Napi::CallbackInfo &info)
+{
+    InstanceData *instanceData = info.Env().GetInstanceData<InstanceData>();
+    return instanceData->PCRE2.Value();
 }
 
 static Napi::Object Init(Napi::Env env, Napi::Object exports) {

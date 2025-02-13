@@ -1,3 +1,3 @@
 # node-pcre2
 
-:warning: WIP Node-API binding to PCRE2 :warning:
+:warning: WIP Node-API bindings to PCRE2 :warning:
