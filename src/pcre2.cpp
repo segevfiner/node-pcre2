@@ -8,10 +8,8 @@ Napi::Object PCRE2::Init(Napi::Env env, Napi::Object exports) {
     Napi::Function func = DefineClass(env, "PCRE2", {
         InstanceMethod<&PCRE2::Exec>("exec"),
         InstanceMethod<&PCRE2::Test>("test"),
-        // TODO There is no standard way to convert utf-16 to utf-8 and no support for formatting u16string....
-        //  Also need to decide on the correct format for the string representation
-        // InstanceMethod<&PCRE2::ToString>("toString"),
-        // InstanceMethod<&PCRE2::ToString>(Napi::Symbol::For(env, "nodejs.util.inspect.custom")),
+        InstanceMethod<&PCRE2::ToString>("toString"),
+        InstanceMethod<&PCRE2::ToString>(Napi::Symbol::For(env, "nodejs.util.inspect.custom")),
         InstanceMethod<&PCRE2::Match>(instanceData->Symbol.Get("match").As<Napi::Symbol>()),
         InstanceMethod<&PCRE2::MatchAll>(instanceData->Symbol.Get("matchAll").As<Napi::Symbol>()),
         // InstanceMethod<&PCRE2::Replace>(symbol["replace"]), // This one can be troublesome as pcre2_substitute doesn't handle dynamic replacement by the callout
@@ -100,7 +98,7 @@ PCRE2::PCRE2(const Napi::CallbackInfo &info)
         PCRE2_UCHAR buffer[256];
         pcre2_get_error_message(errornumber, buffer, sizeof(buffer));
         std::ostringstream oss;
-        oss << "PCRE2 compilation failed at offset" << erroroffset << ": " << buffer;
+        oss << "PCRE2 compilation failed at offset " << erroroffset << ": " << buffer;
         throw Napi::Error::New(info.Env(), oss.str());
     }
 
@@ -161,6 +159,7 @@ Napi::Value PCRE2::ExecImpl(Napi::Env env, const Napi::String &subject)
         m_matchData,
         nullptr
     );
+    // TODO Might want to report pcre2_get_match_data_heapframes_size to AdjustExternalMemory
     if (rc < 0) {
         if (rc == PCRE2_ERROR_NOMATCH) {
             m_lastIndex = 0;
@@ -275,6 +274,7 @@ Napi::Value PCRE2::Test(const Napi::CallbackInfo &info)
         m_matchData,
         nullptr
     );
+    // TODO Might want to report pcre2_get_match_data_heapframes_size to AdjustExternalMemory
     if (rc < 0) {
         if (rc == PCRE2_ERROR_NOMATCH) {
             return Napi::Boolean::New(info.Env(), false);
@@ -288,13 +288,21 @@ Napi::Value PCRE2::Test(const Napi::CallbackInfo &info)
     return Napi::Boolean::New(info.Env(), true);
 }
 
-// TODO There is no standard way to convert utf-16 to utf-8 and no support for formatting u16string....
-// Napi::Value PCRE2::ToString(const Napi::CallbackInfo &info)
-// {
-//     std::ostringstream oss;
-//     oss << "pcre2`" << m_source << "`";
-//     return Napi::String::New(info.Env(), oss.str());
-// }
+Napi::Value PCRE2::ToString(const Napi::CallbackInfo &info)
+{
+    std::ostringstream oss;
+
+    oss << "pcre2";
+
+    if (!m_flags.empty()) {
+        oss << "('" << m_flags << "')";
+    }
+
+    std::string pattern = Napi::String::New(info.Env(), m_pattern).Utf8Value();
+    oss << "`" << pattern << "`";
+
+    return Napi::String::New(info.Env(), oss.str());
+}
 
 Napi::Value PCRE2::Match(const Napi::CallbackInfo &info)
 {
@@ -379,6 +387,7 @@ void PCRE2::SetLastIndex(const Napi::CallbackInfo &info, const Napi::Value &valu
 
 void PCRE2::ParseFlags(Napi::Env env, const std::string &flags)
 {
+    // TODO We can support a bunch of other flags that are supoorted by PCRE2
     for (char flag : flags) {
         switch (flag) {
             case 'd':
@@ -405,6 +414,18 @@ void PCRE2::ParseFlags(Napi::Env env, const std::string &flags)
             case 'y':
                 m_sticky = true;
                 break;
+            // TODO
+            // case 'x':
+            //     if (m_options | PCRE2_EXTENDED) {
+            //         m_options |= PCRE2_EXTENDED_MORE;
+            //     }
+            //     m_options |= PCRE2_EXTENDED;
+            //     break;
+            // case 'n':
+            //    m_options |= PCRE2_NO_AUTO_CAPTURE;
+            //    break;
+            // TODO Add flag to disable ECMAScript compat and act more like PCRE2
+            // TODO Add flag to disable JIT or force immediate JIT?
             default:
                 throw Napi::Error::New(env, "Unsupported flag: " + std::string{flag});
         }

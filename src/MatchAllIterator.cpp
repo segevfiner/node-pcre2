@@ -6,7 +6,7 @@ Napi::Object MatchAllIterator::Init(Napi::Env env, Napi::Object exports)
 {
     InstanceData *instanceData = env.GetInstanceData<InstanceData>();
 
-    Napi::Function ctor = DefineClass(env, "MatchAllIterator", {
+    Napi::Function ctor = DefineClass(env, "Object [PCRE2 String Iterator]", {
         InstanceMethod<&MatchAllIterator::Iterator>(instanceData->Symbol.Get("iterator").As<Napi::Symbol>()),
         InstanceMethod<&MatchAllIterator::Next>("next"),
     });
