@@ -23,6 +23,7 @@ public:
 InstanceData::InstanceData(Napi::Env env) {
     compileContext = pcre2_compile_context_create(nullptr);
     pcre2_set_newline(compileContext, PCRE2_NEWLINE_ANYCRLF);
+    pcre2_set_compile_extra_options(compileContext, PCRE2_EXTRA_ALT_BSUX);
 
     RegExp = Napi::Persistent(env.Global().Get("RegExp").As<Napi::Function>());
     ObjectCreate = Napi::Persistent(env.Global().Get("Object").As<Napi::Object>().Get("create").As<Napi::Function>());
@@ -59,6 +60,7 @@ private:
     Napi::Value Multiline(const Napi::CallbackInfo &info);
     Napi::Value Sticky(const Napi::CallbackInfo &info);
     Napi::Value Unicode(const Napi::CallbackInfo &info);
+    Napi::Value UnicodeSets(const Napi::CallbackInfo &info);
 
     void ParseFlags(Napi::Env env, const std::string &flags);
     size_t PatternSize(Napi::Env env) const;
@@ -104,8 +106,7 @@ Napi::Object PCRE2::Init(Napi::Env env, Napi::Object exports) {
         InstanceAccessor<&PCRE2::Multiline>("multiline"),
         InstanceAccessor<&PCRE2::Sticky>("sticky"),
         InstanceAccessor<&PCRE2::Unicode>("unicode"),
-        // TODO What to do about this one? This is a dialect flag for JS regexp that doesn't apply to PCRE2 syntax
-        // InstanceAccessor<&PCRE2::Unicode>("unicodeSets"),
+        InstanceAccessor<&PCRE2::UnicodeSets>("unicodeSets"),
         // StaticMethod<&PCRE2::Split>(symbol.Get("species").As<Napi::Symbol>()),
     });
 
@@ -117,7 +118,7 @@ Napi::Object PCRE2::Init(Napi::Env env, Napi::Object exports) {
 
 PCRE2::PCRE2(const Napi::CallbackInfo &info)
     : Napi::ObjectWrap<PCRE2>(info)
-    , m_options(0)
+    , m_options(PCRE2_ALT_BSUX | PCRE2_DOLLAR_ENDONLY)
     , m_global(false)
     , m_sticky(false)
     , m_hasIndices(false)
@@ -426,8 +427,10 @@ void PCRE2::ParseFlags(Napi::Env env, const std::string &flags)
                 m_options |= PCRE2_DOTALL;
                 break;
             case 'u':
-            case 'v':
                 m_options |= PCRE2_UTF;
+                break;
+            case 'v':
+                m_options |= PCRE2_ALT_EXTENDED_CLASS;
                 break;
             case 'y':
                 m_sticky = true;
@@ -500,6 +503,11 @@ Napi::Value PCRE2::Sticky(const Napi::CallbackInfo &info)
 Napi::Value PCRE2::Unicode(const Napi::CallbackInfo &info)
 {
     return Napi::Boolean::New(info.Env(), m_options & PCRE2_UTF);
+}
+
+Napi::Value PCRE2::UnicodeSets(const Napi::CallbackInfo &info)
+{
+    return Napi::Boolean::New(info.Env(), m_options & PCRE2_ALT_EXTENDED_CLASS);
 }
 
 static Napi::Object Init(Napi::Env env, Napi::Object exports) {
