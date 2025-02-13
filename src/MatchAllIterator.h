@@ -18,6 +18,7 @@ private:
     Napi::Value Iterator(const Napi::CallbackInfo &info);
     Napi::Value Next(const Napi::CallbackInfo &info);
 
+    Napi::ObjectReference m_private;
     Napi::ObjectReference m_pcre2Ref;
     PCRE2 *m_pcre2;
 };

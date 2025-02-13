@@ -8,7 +8,7 @@ Napi::Object MatchAllIterator::Init(Napi::Env env, Napi::Object exports)
 
     Napi::Function ctor = DefineClass(env, "MatchAllIterator", {
         InstanceMethod<&MatchAllIterator::Iterator>(instanceData->Symbol.Get("iterator").As<Napi::Symbol>()),
-        InstanceAccessor<&MatchAllIterator::Next>("next"),
+        InstanceMethod<&MatchAllIterator::Next>("next"),
     });
 
     instanceData->MatchAllIterator = Napi::Persistent(ctor);
@@ -22,12 +22,12 @@ MatchAllIterator::MatchAllIterator(const Napi::CallbackInfo &info)
     m_pcre2Ref = Napi::Persistent(info[0].As<Napi::Object>());
     m_pcre2 = PCRE2::Unwrap(m_pcre2Ref.Value());
 
-    Value().Set("subject", info[1]);
+    m_private = Napi::Persistent(Napi::Object::New(info.Env()));
+    m_private.Set("subject", info[1]);
 }
 
 MatchAllIterator::~MatchAllIterator()
 {
-
 }
 
 Napi::Value MatchAllIterator::Iterator(const Napi::CallbackInfo &info)
@@ -37,9 +37,16 @@ Napi::Value MatchAllIterator::Iterator(const Napi::CallbackInfo &info)
 
 Napi::Value MatchAllIterator::Next(const Napi::CallbackInfo &info)
 {
-    Napi::Value result = m_pcre2->ExecImpl(info.Env(), Value().Get("subject").As<Napi::String>());
+    Napi::Value value = m_pcre2->ExecImpl(info.Env(), m_private.Get("subject").As<Napi::String>());
 
     // TODO Handle empty matches
+
+    Napi::Object result = Napi::Object::New(info.Env());
+    if (!value.IsNull()) {
+        result["value"] = value;
+    } else {
+        result["done"] = Napi::Boolean::New(info.Env(), true);
+    }
 
     return result;
 }
