@@ -17,6 +17,8 @@ add_library(${PROJECT_NAME} SHARED
   src/InstanceData.cpp
   src/PCRE2.h
   src/PCRE2.cpp
+  src/MatchAllIterator.h
+  src/MatchAllIterator.cpp
   ${CMAKE_JS_SRC}
 )
 set_target_properties(${PROJECT_NAME} PROPERTIES PREFIX "" SUFFIX ".node")

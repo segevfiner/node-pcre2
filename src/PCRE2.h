@@ -10,12 +10,13 @@ public:
     explicit PCRE2(const Napi::CallbackInfo &info);
     virtual ~PCRE2();
 
+    Napi::Value ExecImpl(Napi::Env env, const Napi::String &subject);
+
     PCRE2(const PCRE2&) = delete;
     PCRE2& operator=(const PCRE2&) = delete;
 
 private:
     Napi::Value Exec(const Napi::CallbackInfo &info);
-    Napi::Value ExecImpl(Napi::Env env, const Napi::String &subject);
     Napi::Value Test(const Napi::CallbackInfo &info);
     Napi::Value ToString(const Napi::CallbackInfo &info);
     Napi::Value Match(const Napi::CallbackInfo &info);
@@ -50,6 +51,8 @@ private:
     pcre2_match_data *m_matchData;
     size_t m_lastIndex;
     int m_tierUpTicks;
+    bool m_utf8;
+    bool m_crlfIsNewline;
     size_t m_size;
 };
 
