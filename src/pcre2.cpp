@@ -107,7 +107,7 @@ Napi::Object PCRE2::Init(Napi::Env env, Napi::Object exports) {
         InstanceAccessor<&PCRE2::Sticky>("sticky"),
         InstanceAccessor<&PCRE2::Unicode>("unicode"),
         InstanceAccessor<&PCRE2::UnicodeSets>("unicodeSets"),
-        // StaticMethod<&PCRE2::Split>(symbol.Get("species").As<Napi::Symbol>()),
+        // StaticMethod<&PCRE2::Species>(symbol.Get("species").As<Napi::Symbol>()),
     });
 
     instanceData->PCRE2 = Napi::Persistent(func);
