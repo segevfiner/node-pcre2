@@ -12,8 +12,12 @@ set(PCRE2_STATIC_PIC ON)
 add_subdirectory(pcre2)
 
 add_library(${PROJECT_NAME} SHARED
-    src/pcre2.cpp
-    ${CMAKE_JS_SRC}
+  src/Addon.cpp
+  src/InstanceData.h
+  src/InstanceData.cpp
+  src/PCRE2.h
+  src/PCRE2.cpp
+  ${CMAKE_JS_SRC}
 )
 set_target_properties(${PROJECT_NAME} PROPERTIES PREFIX "" SUFFIX ".node")
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_JS_INC})

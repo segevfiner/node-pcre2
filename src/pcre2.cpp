@@ -1,88 +1,6 @@
-#include <napi.h>
-#include <pcre2.h>
 #include <sstream>
-
-class InstanceData {
-public:
-    explicit InstanceData(Napi::Env env);
-
-    virtual ~InstanceData();
-
-    InstanceData(const InstanceData&) = delete;
-    InstanceData& operator=(const InstanceData&) = delete;
-
-    pcre2_compile_context *compileContext;
-
-    Napi::ObjectReference Symbol;
-    Napi::FunctionReference RegExp;
-    Napi::FunctionReference ObjectCreate;
-    Napi::FunctionReference ArrayPush;
-
-    Napi::FunctionReference PCRE2;
-};
-
-InstanceData::InstanceData(Napi::Env env) {
-    compileContext = pcre2_compile_context_create(nullptr);
-    pcre2_set_newline(compileContext, PCRE2_NEWLINE_ANYCRLF);
-    pcre2_set_compile_extra_options(compileContext, PCRE2_EXTRA_ALT_BSUX);
-
-    Symbol = Napi::Persistent(env.Global().Get("Symbol").As<Napi::Object>());
-    RegExp = Napi::Persistent(env.Global().Get("RegExp").As<Napi::Function>());
-    ObjectCreate = Napi::Persistent(env.Global().Get("Object").As<Napi::Object>().Get("create").As<Napi::Function>());
-    ArrayPush = Napi::Persistent(env.Global().Get("Array").As<Napi::Function>().Get("prototype").As<Napi::Object>().Get("push").As<Napi::Function>());
-}
-
-InstanceData::~InstanceData() {
-    pcre2_compile_context_free(compileContext);
-}
-
-class PCRE2 : public Napi::ObjectWrap<PCRE2> {
-public:
-    static Napi::Object Init(Napi::Env env, Napi::Object exports);
-    explicit PCRE2(const Napi::CallbackInfo &info);
-    virtual ~PCRE2();
-
-    PCRE2(const PCRE2&) = delete;
-    PCRE2& operator=(const PCRE2&) = delete;
-
-private:
-    Napi::Value Exec(const Napi::CallbackInfo &info);
-    Napi::Value ExecImpl(Napi::Env env, const Napi::String &subject);
-    Napi::Value Test(const Napi::CallbackInfo &info);
-    Napi::Value ToString(const Napi::CallbackInfo &info);
-    Napi::Value Match(const Napi::CallbackInfo &info);
-    Napi::Value GetLastIndex(const Napi::CallbackInfo &info);
-    void SetLastIndex(const Napi::CallbackInfo &info, const Napi::Value &value);
-    Napi::Value Source(const Napi::CallbackInfo &info);
-    Napi::Value Flags(const Napi::CallbackInfo &info);
-    Napi::Value DotAll(const Napi::CallbackInfo &info);
-    Napi::Value Global(const Napi::CallbackInfo &info);
-    Napi::Value HasIndices(const Napi::CallbackInfo &info);
-    Napi::Value IgnoreCase(const Napi::CallbackInfo &info);
-    Napi::Value Multiline(const Napi::CallbackInfo &info);
-    Napi::Value Sticky(const Napi::CallbackInfo &info);
-    Napi::Value Unicode(const Napi::CallbackInfo &info);
-    Napi::Value UnicodeSets(const Napi::CallbackInfo &info);
-
-    static Napi::Value Species(const Napi::CallbackInfo &info);
-
-    void ParseFlags(Napi::Env env, const std::string &flags);
-    size_t PatternSize(Napi::Env env) const;
-
-    void TierUpTick(Napi::Env env);
-
-    std::u16string m_pattern;
-    std::string m_flags;
-    uint32_t m_options;
-    bool m_global;
-    bool m_sticky;
-    bool m_hasIndices;
-    pcre2_code *m_re;
-    pcre2_match_data *m_matchData;
-    size_t m_lastIndex;
-    int m_tierUpTicks;
-    size_t m_size;
-};
+#include "InstanceData.h"
+#include "PCRE2.h"
 
 Napi::Object PCRE2::Init(Napi::Env env, Napi::Object exports) {
     InstanceData *instanceData = env.GetInstanceData<InstanceData>();
@@ -95,7 +13,7 @@ Napi::Object PCRE2::Init(Napi::Env env, Napi::Object exports) {
         // InstanceMethod<&PCRE2::ToString>("toString"),
         // InstanceMethod<&PCRE2::ToString>(Napi::Symbol::For(env, "nodejs.util.inspect.custom")),
         InstanceMethod<&PCRE2::Match>(instanceData->Symbol.Get("match").As<Napi::Symbol>()),
-        // InstanceMethod<&PCRE2::MatchAll>(symbol["matchAll"]),
+        InstanceMethod<&PCRE2::MatchAll>(instanceData->Symbol.Get("matchAll").As<Napi::Symbol>()),
         // InstanceMethod<&PCRE2::Replace>(symbol["replace"]), // This one can be troublesome as pcre2_substitute doesn't handle dynamic replacement by the callout
         // InstanceMethod<&PCRE2::Search>(symbol["search"]),
         // InstanceMethod<&PCRE2::Split>(symbol["split"]),
@@ -392,8 +310,18 @@ Napi::Value PCRE2::Match(const Napi::CallbackInfo &info)
         instanceData->ArrayPush.Call(result, { match.As<Napi::Array>().Get(0u) });
     }
 
-
     return result;
+}
+
+Napi::Value PCRE2::MatchAll(const Napi::CallbackInfo &info)
+{
+    InstanceData *instanceData = info.Env().GetInstanceData<InstanceData>();
+
+    Napi::Function speciesCtor = this->Value().Get("constructor").As<Napi::Object>().Get(instanceData->Symbol.Get("species").As<Napi::Symbol>()).As<Napi::Function>();
+    PCRE2 *matcher = PCRE2::Unwrap(speciesCtor.New({ this->Value(), Napi::String::New(info.Env(), m_flags) }));
+    matcher->m_lastIndex = m_lastIndex;
+
+    return Napi::Value();
 }
 
 Napi::Value PCRE2::GetLastIndex(const Napi::CallbackInfo &info)
@@ -530,13 +458,3 @@ Napi::Value PCRE2::Species(const Napi::CallbackInfo &info)
     InstanceData *instanceData = info.Env().GetInstanceData<InstanceData>();
     return instanceData->PCRE2.Value();
 }
-
-static Napi::Object Init(Napi::Env env, Napi::Object exports) {
-    env.SetInstanceData(new InstanceData(env));
-    PCRE2::Init(env, exports);
-    exports["PCRE2_MAJOR"] = PCRE2_MAJOR;
-    exports["PCRE2_MINOR"] = PCRE2_MINOR;
-    return exports;
-}
-
-NODE_API_MODULE(NODE_GYP_MODULE_NAME, Init)
