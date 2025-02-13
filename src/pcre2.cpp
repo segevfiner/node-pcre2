@@ -118,7 +118,7 @@ Napi::Object PCRE2::Init(Napi::Env env, Napi::Object exports) {
 
 PCRE2::PCRE2(const Napi::CallbackInfo &info)
     : Napi::ObjectWrap<PCRE2>(info)
-    , m_options(PCRE2_ALT_BSUX | PCRE2_DOLLAR_ENDONLY)
+    , m_options(PCRE2_ALT_BSUX | PCRE2_DOLLAR_ENDONLY | PCRE2_MATCH_UNSET_BACKREF)
     , m_global(false)
     , m_sticky(false)
     , m_hasIndices(false)
