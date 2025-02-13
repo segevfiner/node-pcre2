@@ -1,6 +1,5 @@
 import bindings from "bindings";
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 declare namespace Addon {
   class PCRE2 extends RegExp {
     constructor(pattern: RegExp | PCRE2 | string, flags?: string);
