@@ -10,7 +10,8 @@ public:
     explicit PCRE2(const Napi::CallbackInfo &info);
     virtual ~PCRE2();
 
-    Napi::Value ExecImpl(Napi::Env env, const Napi::String &subject);
+    Napi::Value ExecImpl(Napi::Env env, const Napi::String &subject, uint32_t options = 0);
+    void HandleEmptyMatch(Napi::Env env, Napi::Array match, const std::u16string &subjectStr);
 
     PCRE2(const PCRE2&) = delete;
     PCRE2& operator=(const PCRE2&) = delete;
@@ -20,6 +21,7 @@ private:
     Napi::Value Test(const Napi::CallbackInfo &info);
     Napi::Value ToString(const Napi::CallbackInfo &info);
     Napi::Value Match(const Napi::CallbackInfo &info);
+    Napi::Value Search(const Napi::CallbackInfo &info);
     Napi::Value MatchAll(const Napi::CallbackInfo &info);
     Napi::Value GetLastIndex(const Napi::CallbackInfo &info);
     void SetLastIndex(const Napi::CallbackInfo &info, const Napi::Value &value);

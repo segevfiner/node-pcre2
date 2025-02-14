@@ -21,7 +21,7 @@ public:
     Napi::FunctionReference ArrayPush;
 
     Napi::FunctionReference PCRE2;
-    Napi::FunctionReference MatchAllIterator;
+    Napi::FunctionReference PCRE2StringIterator;
 };
 
 #endif // NODE_PCRE2_INSTANCE_DATA_H_

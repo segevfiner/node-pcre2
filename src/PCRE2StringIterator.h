@@ -5,20 +5,21 @@
 
 class PCRE2;
 
-class MatchAllIterator : public Napi::ObjectWrap<MatchAllIterator> {
+class PCRE2StringIterator : public Napi::ObjectWrap<PCRE2StringIterator> {
 public:
     static Napi::Object Init(Napi::Env env, Napi::Object exports);
-    explicit MatchAllIterator(const Napi::CallbackInfo &info);
-    virtual ~MatchAllIterator();
+    explicit PCRE2StringIterator(const Napi::CallbackInfo &info);
+    virtual ~PCRE2StringIterator();
 
-    MatchAllIterator(const MatchAllIterator&) = delete;
-    MatchAllIterator& operator=(const MatchAllIterator&) = delete;
+    PCRE2StringIterator(const PCRE2StringIterator&) = delete;
+    PCRE2StringIterator& operator=(const PCRE2StringIterator&) = delete;
 
 private:
     Napi::Value Iterator(const Napi::CallbackInfo &info);
     Napi::Value Next(const Napi::CallbackInfo &info);
 
     Napi::ObjectReference m_private;
+    std::u16string m_subject;
     Napi::ObjectReference m_pcre2Ref;
     PCRE2 *m_pcre2;
 };

@@ -1,8 +1,29 @@
 import bindings from "bindings";
 
 declare namespace Addon {
-  class PCRE2 extends RegExp {
-    constructor(pattern: RegExp | PCRE2 | string, flags?: string);
+  class PCRE2 {
+    constructor(pattern: string, flags?: string);
+
+    exec(string: string): RegExpExecArray | null;
+    test(string: string): boolean;
+
+    source: string;
+    flags: string;
+    lastIndex: number;
+    global: boolean;
+    ignoreCase: boolean;
+    multiline: boolean;
+    sticky: boolean;
+    unicode: boolean;
+    dotAll: boolean;
+    hasIndices: boolean;
+    unicodeSets: boolean;
+
+    [Symbol.match](string: string): RegExpMatchArray | null;
+    [Symbol.search](string: string): number;
+    [Symbol.split](string: string, limit?: number): string[];
+    [Symbol.matchAll](str: string): RegExpStringIterator<RegExpMatchArray>;
+    [Symbol.replace](str: string, replacement: string): string;
   }
 
   const PCRE2_MAJOR: number;

@@ -2,6 +2,10 @@
 #include "InstanceData.h"
 #include "PCRE2.h"
 
+const napi_type_tag PCRE2TypeTag = {
+    0x1edf75a38336451d, 0xa5ed9ce2e4c00c38
+};
+
 Napi::Object PCRE2::Init(Napi::Env env, Napi::Object exports) {
     InstanceData *instanceData = env.GetInstanceData<InstanceData>();
 
@@ -11,10 +15,10 @@ Napi::Object PCRE2::Init(Napi::Env env, Napi::Object exports) {
         InstanceMethod<&PCRE2::ToString>("toString"),
         InstanceMethod<&PCRE2::ToString>(Napi::Symbol::For(env, "nodejs.util.inspect.custom")),
         InstanceMethod<&PCRE2::Match>(instanceData->Symbol.Get("match").As<Napi::Symbol>()),
+        InstanceMethod<&PCRE2::Search>(instanceData->Symbol.Get("search").As<Napi::Symbol>()),
         InstanceMethod<&PCRE2::MatchAll>(instanceData->Symbol.Get("matchAll").As<Napi::Symbol>()),
-        // InstanceMethod<&PCRE2::Replace>(symbol["replace"]), // This one can be troublesome as pcre2_substitute doesn't handle dynamic replacement by the callout
-        // InstanceMethod<&PCRE2::Search>(symbol["search"]),
         // InstanceMethod<&PCRE2::Split>(symbol["split"]),
+        // InstanceMethod<&PCRE2::Replace>(symbol["replace"]), // This one can be troublesome as pcre2_substitute doesn't handle dynamic replacement by the callout
         InstanceAccessor<&PCRE2::GetLastIndex, &PCRE2::SetLastIndex>("lastIndex"),
         InstanceAccessor<&PCRE2::Source>("source"),
         InstanceAccessor<&PCRE2::Flags>("flags"),
@@ -47,6 +51,8 @@ PCRE2::PCRE2(const Napi::CallbackInfo &info)
 {
     InstanceData *instanceData = info.Env().GetInstanceData<InstanceData>();
 
+    Value().TypeTag(&PCRE2TypeTag);
+
     if (info.Length() < 1) {
         throw Napi::TypeError::New(info.Env(), "Wrong number of arguments");
     }
@@ -57,17 +63,16 @@ PCRE2::PCRE2(const Napi::CallbackInfo &info)
         Napi::Object re = info[0].As<Napi::Object>();
         Napi::Value source = re.Get("source");
         if (!source.IsString()) {
-            throw Napi::TypeError::New(info.Env(), "Expected a string");
+            throw Napi::TypeError::New(info.Env(), "RegExp source is not a string");
         }
         m_pattern = source.As<Napi::String>().Utf16Value();
 
         Napi::Value flags = re.Get("flags");
         if (!flags.IsString()) {
-            throw Napi::TypeError::New(info.Env(), "Expected a string");
+            throw Napi::TypeError::New(info.Env(), "RegExp flags is not a string");
         }
         m_flags = flags.As<Napi::String>().Utf8Value();
-    // TODO Might want to check a type tag which is safer?
-    } else if (info[0].IsObject() && info[0].As<Napi::Object>().InstanceOf(instanceData->PCRE2.Value())) {
+    } else if (info[0].IsObject() && info[0].As<Napi::Object>().CheckTypeTag(&PCRE2TypeTag)) {
         PCRE2 *pcre2 = PCRE2::Unwrap(info[0].As<Napi::Object>());
         m_pattern = pcre2->m_pattern;
         m_flags = pcre2->m_flags;
@@ -95,10 +100,10 @@ PCRE2::PCRE2(const Napi::CallbackInfo &info)
         instanceData->compileContext
     );
     if (m_re == nullptr) {
-        PCRE2_UCHAR buffer[256];
-        pcre2_get_error_message(errornumber, buffer, sizeof(buffer));
+        PCRE2_UCHAR errorBuffer[256];
+        pcre2_get_error_message(errornumber, errorBuffer, sizeof(errorBuffer));
         std::ostringstream oss;
-        oss << "PCRE2 compilation failed at offset " << erroroffset << ": " << buffer;
+        oss << "PCRE2 compilation failed at offset " << erroroffset << ": " << errorBuffer;
         throw Napi::Error::New(info.Env(), oss.str());
     }
 
@@ -141,7 +146,7 @@ Napi::Value PCRE2::Exec(const Napi::CallbackInfo &info)
     return ExecImpl(info.Env(), info[0].As<Napi::String>());
 }
 
-Napi::Value PCRE2::ExecImpl(Napi::Env env, const Napi::String &subject)
+Napi::Value PCRE2::ExecImpl(Napi::Env env, const Napi::String &subject, uint32_t options /* = 0 */)
 {
     InstanceData *instanceData = env.GetInstanceData<InstanceData>();
 
@@ -155,7 +160,7 @@ Napi::Value PCRE2::ExecImpl(Napi::Env env, const Napi::String &subject)
         reinterpret_cast<PCRE2_SPTR>(subjectStr.c_str()),
         subjectStr.length(),
         m_lastIndex,
-        m_sticky ? PCRE2_ANCHORED : 0,
+        m_options | (m_sticky ? PCRE2_ANCHORED : 0),
         m_matchData,
         nullptr
     );
@@ -253,6 +258,34 @@ Napi::Value PCRE2::ExecImpl(Napi::Env env, const Napi::String &subject)
     return scope.Escape(result);
 }
 
+void PCRE2::HandleEmptyMatch(Napi::Env env, Napi::Array match, const std::u16string &subjectStr)
+{
+    // TODO The behavivor here differs between JS RegExp and PCRE2
+    //  PCRE2 retries the match at the same position but disallowing empty match and anchored (PCRE2_NOTEMPTY_ATSTART | PCRE2_ANCHORED),
+    //  while JS immediately advances the index
+    //
+    //  This is currently the JS behavior
+    if (match.As<Napi::Array>().Get(0u).As<Napi::String>().Utf16Value().empty()) {
+        m_lastIndex++;
+
+        if (m_crlfIsNewline &&
+            m_lastIndex < subjectStr.length() - 1 && // We are at CRLF
+            subjectStr[m_lastIndex] == '\r' &&
+            subjectStr[m_lastIndex - 1] == '\n') {
+                // Advance by one more.
+                m_lastIndex++;
+        } else if (m_utf8) {
+            // Otherwise, ensure we advance a whole UTF-8 character
+            while (m_lastIndex < subjectStr.length()) {
+                if ((subjectStr[m_lastIndex] & 0xc0) != 0x80) {
+                    break;
+                }
+                m_lastIndex++;
+            }
+        }
+    }
+}
+
 Napi::Value PCRE2::Test(const Napi::CallbackInfo &info)
 {
     if (info.Length() < 1) {
@@ -271,6 +304,7 @@ Napi::Value PCRE2::Test(const Napi::CallbackInfo &info)
         subjectStr.length(),
         0,
         0,
+        // TODO I think it is possible to use a smaller pcre2_match_data so it doesn't fill in ovector for performance
         m_matchData,
         nullptr
     );
@@ -319,42 +353,57 @@ Napi::Value PCRE2::Match(const Napi::CallbackInfo &info)
     std::u16string subjectStr = subject.Utf16Value();
 
     if (!m_global) {
-        return ExecImpl(info.Env(), subject).As<Napi::Object>();
+        return ExecImpl(info.Env(), subject);
     }
 
     Napi::Array result = Napi::Array::New(info.Env());
     for (uint32_t i; ; i++) {
-        Napi::Value match = ExecImpl(info.Env(), subject).As<Napi::Object>();
+        Napi::Array match = ExecImpl(info.Env(), subject).As<Napi::Array>();
         if (match.IsNull()) {
             break;
         }
 
-        instanceData->ArrayPush.Call(result, { match.As<Napi::Array>().Get(0u) });
+        instanceData->ArrayPush.Call(result, { match.Get(0u) });
 
-        // TODO The behavivor here differs between JS RegExp and PCRE2
-        //  PCRE2 retries the match at the same position but disallowing empty match and anchored (PCRE2_NOTEMPTY_ATSTART | PCRE2_ANCHORED),
-        //  while JS immediately advances the index
-        //
-        //  This is currently the JS behavior
-        if (match.As<Napi::Array>().Get(0u).As<Napi::String>().Utf16Value().empty()) {
-            m_lastIndex++;
+        HandleEmptyMatch(info.Env(), match, subjectStr);
+    }
 
-            if (m_crlfIsNewline &&
-                m_lastIndex < subjectStr.length() - 1 && // We are at CRLF
-                subjectStr[m_lastIndex] == '\r' &&
-                subjectStr[m_lastIndex - 1] == '\n') {
-                    // Advance by one more.
-                    m_lastIndex++;
-            } else if (m_utf8) {
-                // Otherwise, ensure we advance a whole UTF-8 character
-                while (m_lastIndex < subjectStr.length()) {
-                    if ((subjectStr[m_lastIndex] & 0xc0) != 0x80) {
-                        break;
-                    }
-                    m_lastIndex++;
-                }
-            }
+    return result;
+}
+
+Napi::Value PCRE2::Search(const Napi::CallbackInfo &info)
+{
+    InstanceData *instanceData = info.Env().GetInstanceData<InstanceData>();
+
+    if (info.Length() < 1) {
+        throw Napi::TypeError::New(info.Env(), "Wrong number of arguments");
+    }
+    if (!info[0].IsString()) {
+        throw Napi::TypeError::New(info.Env(), "Expected a string");
+    }
+
+    Napi::String subject = info[0].As<Napi::String>();
+    std::u16string subjectStr = subject.Utf16Value();
+
+    if (!m_global) {
+        Napi::Array match = ExecImpl(info.Env(), subject).As<Napi::Array>();
+        if (match.IsNull()) {
+            return Napi::Number::New(info.Env(), -1);
         }
+
+        return match.Get("index");
+    }
+
+    Napi::Array result = Napi::Array::New(info.Env());
+    for (uint32_t i; ; i++) {
+        Napi::Array match = ExecImpl(info.Env(), subject).As<Napi::Array>();
+        if (match.IsNull()) {
+            break;
+        }
+
+        instanceData->ArrayPush.Call(result, { match.Get("index") });
+
+        HandleEmptyMatch(info.Env(), match, subjectStr);
     }
 
     return result;
@@ -364,11 +413,13 @@ Napi::Value PCRE2::MatchAll(const Napi::CallbackInfo &info)
 {
     InstanceData *instanceData = info.Env().GetInstanceData<InstanceData>();
 
-    Napi::Function speciesCtor = Value().Get("constructor").As<Napi::Object>().Get(instanceData->Symbol.Get("species").As<Napi::Symbol>()).As<Napi::Function>().Call({}).As<Napi::Function>();
+    Napi::Function speciesCtor = Value().Get("constructor").As<Napi::Object>()
+        .Get(instanceData->Symbol.Get("species").As<Napi::Symbol>()).As<Napi::Function>()
+        .Call({}).As<Napi::Function>();
     PCRE2 *matcher = PCRE2::Unwrap(speciesCtor.New({ Value(), Napi::String::New(info.Env(), m_flags) }));
     matcher->m_lastIndex = m_lastIndex;
 
-    return instanceData->MatchAllIterator.New({ matcher->Value(), info[0] });
+    return instanceData->PCRE2StringIterator.New({ matcher->Value(), info[0] });
 }
 
 Napi::Value PCRE2::GetLastIndex(const Napi::CallbackInfo &info)
