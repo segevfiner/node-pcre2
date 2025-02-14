@@ -16,9 +16,9 @@ Napi::Object PCRE2::Init(Napi::Env env, Napi::Object exports) {
         InstanceMethod<&PCRE2::ToString>(Napi::Symbol::For(env, "nodejs.util.inspect.custom")),
         InstanceMethod<&PCRE2::Match>(instanceData->Symbol.Get("match").As<Napi::Symbol>()),
         InstanceMethod<&PCRE2::Search>(instanceData->Symbol.Get("search").As<Napi::Symbol>()),
+        InstanceMethod<&PCRE2::Split>(instanceData->Symbol.Get("split").As<Napi::Symbol>()),
         InstanceMethod<&PCRE2::MatchAll>(instanceData->Symbol.Get("matchAll").As<Napi::Symbol>()),
-        // InstanceMethod<&PCRE2::Split>(symbol["split"]),
-        // InstanceMethod<&PCRE2::Replace>(symbol["replace"]), // This one can be troublesome as pcre2_substitute doesn't handle dynamic replacement by the callout
+        InstanceMethod<&PCRE2::Replace>(instanceData->Symbol.Get("replace").As<Napi::Symbol>()),
         InstanceAccessor<&PCRE2::GetLastIndex, &PCRE2::SetLastIndex>("lastIndex"),
         InstanceAccessor<&PCRE2::Source>("source"),
         InstanceAccessor<&PCRE2::Flags>("flags"),
@@ -132,18 +132,6 @@ PCRE2::~PCRE2() {
     pcre2_match_data_free(m_matchData);
     pcre2_code_free(m_re);
     Napi::MemoryManagement::AdjustExternalMemory(Env(), -m_size);
-}
-
-Napi::Value PCRE2::Exec(const Napi::CallbackInfo &info)
-{
-    if (info.Length() < 1) {
-        throw Napi::TypeError::New(info.Env(), "Wrong number of arguments");
-    }
-    if (!info[0].IsString()) {
-        throw Napi::TypeError::New(info.Env(), "Expected a string");
-    }
-
-    return ExecImpl(info.Env(), info[0].As<Napi::String>());
 }
 
 Napi::Value PCRE2::ExecImpl(Napi::Env env, const Napi::String &subject, uint32_t options /* = 0 */)
@@ -286,6 +274,18 @@ void PCRE2::HandleEmptyMatch(Napi::Env env, Napi::Array match, const std::u16str
     }
 }
 
+Napi::Value PCRE2::Exec(const Napi::CallbackInfo &info)
+{
+    if (info.Length() < 1) {
+        throw Napi::TypeError::New(info.Env(), "Wrong number of arguments");
+    }
+    if (!info[0].IsString()) {
+        throw Napi::TypeError::New(info.Env(), "Expected a string");
+    }
+
+    return ExecImpl(info.Env(), info[0].As<Napi::String>());
+}
+
 Napi::Value PCRE2::Test(const Napi::CallbackInfo &info)
 {
     if (info.Length() < 1) {
@@ -302,8 +302,8 @@ Napi::Value PCRE2::Test(const Napi::CallbackInfo &info)
         m_re,
         reinterpret_cast<PCRE2_SPTR>(subjectStr.c_str()),
         subjectStr.length(),
-        0,
-        0,
+        m_lastIndex,
+        m_sticky ? PCRE2_ANCHORED : 0,
         // TODO I think it is possible to use a smaller pcre2_match_data so it doesn't fill in ovector for performance
         m_matchData,
         nullptr
@@ -311,12 +311,19 @@ Napi::Value PCRE2::Test(const Napi::CallbackInfo &info)
     // TODO Might want to report pcre2_get_match_data_heapframes_size to AdjustExternalMemory
     if (rc < 0) {
         if (rc == PCRE2_ERROR_NOMATCH) {
+            m_lastIndex = 0;
             return Napi::Boolean::New(info.Env(), false);
         }
 
         std::ostringstream oss;
         oss << "PCRE2 matching error: " << rc;
         throw Napi::Error::New(info.Env(), oss.str());
+    }
+
+    PCRE2_SIZE *ovector = pcre2_get_ovector_pointer(m_matchData);
+
+    if (m_global || m_sticky) {
+        m_lastIndex = ovector[1];
     }
 
     return Napi::Boolean::New(info.Env(), true);
@@ -409,6 +416,11 @@ Napi::Value PCRE2::Search(const Napi::CallbackInfo &info)
     return result;
 }
 
+Napi::Value PCRE2::Split(const Napi::CallbackInfo &info)
+{
+    return Napi::Value();
+}
+
 Napi::Value PCRE2::MatchAll(const Napi::CallbackInfo &info)
 {
     InstanceData *instanceData = info.Env().GetInstanceData<InstanceData>();
@@ -420,6 +432,12 @@ Napi::Value PCRE2::MatchAll(const Napi::CallbackInfo &info)
     matcher->m_lastIndex = m_lastIndex;
 
     return instanceData->PCRE2StringIterator.New({ matcher->Value(), info[0] });
+}
+
+Napi::Value PCRE2::Replace(const Napi::CallbackInfo &info)
+{
+    // TODO This one can be troublesome as pcre2_substitute doesn't handle dynamic replacement by the callout
+    return Napi::Value();
 }
 
 Napi::Value PCRE2::GetLastIndex(const Napi::CallbackInfo &info)

@@ -22,7 +22,9 @@ private:
     Napi::Value ToString(const Napi::CallbackInfo &info);
     Napi::Value Match(const Napi::CallbackInfo &info);
     Napi::Value Search(const Napi::CallbackInfo &info);
+    Napi::Value Split(const Napi::CallbackInfo &info);
     Napi::Value MatchAll(const Napi::CallbackInfo &info);
+    Napi::Value Replace(const Napi::CallbackInfo &info);
     Napi::Value GetLastIndex(const Napi::CallbackInfo &info);
     void SetLastIndex(const Napi::CallbackInfo &info, const Napi::Value &value);
     Napi::Value Source(const Napi::CallbackInfo &info);
