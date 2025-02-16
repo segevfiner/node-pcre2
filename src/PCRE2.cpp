@@ -102,8 +102,9 @@ PCRE2::PCRE2(const Napi::CallbackInfo &info)
     if (m_re == nullptr) {
         PCRE2_UCHAR errorBuffer[256];
         pcre2_get_error_message(errornumber, errorBuffer, sizeof(errorBuffer));
+        Napi::String error = Napi::String::New(info.Env(), reinterpret_cast<const char16_t*>(errorBuffer));
         std::ostringstream oss;
-        oss << "PCRE2 compilation failed at offset " << erroroffset << ": " << errorBuffer;
+        oss << "PCRE2 compilation failed at offset " << erroroffset << ": " << error.Utf8Value();
         throw Napi::Error::New(info.Env(), oss.str());
     }
 
@@ -161,8 +162,9 @@ Napi::Value PCRE2::ExecImpl(Napi::Env env, const Napi::String &subject, uint32_t
 
         PCRE2_UCHAR errorBuffer[256];
         pcre2_get_error_message(rc, errorBuffer, sizeof(errorBuffer));
+        Napi::String error = Napi::String::New(env, reinterpret_cast<const char16_t*>(errorBuffer));
         std::ostringstream oss;
-        oss << "PCRE2 matching error " << rc << " :" << errorBuffer;
+        oss << "PCRE2 matching error " << rc << ": " << error.Utf8Value();
         throw Napi::Error::New(env, oss.str());
     }
 
@@ -330,8 +332,9 @@ Napi::Value PCRE2::Test(const Napi::CallbackInfo &info)
 
         PCRE2_UCHAR errorBuffer[256];
         pcre2_get_error_message(rc, errorBuffer, sizeof(errorBuffer));
+        Napi::String error = Napi::String::New(info.Env(), reinterpret_cast<const char16_t*>(errorBuffer));
         std::ostringstream oss;
-        oss << "PCRE2 matching error " << rc << " :" << errorBuffer;
+        oss << "PCRE2 matching error " << rc << ": " << error.Utf8Value();
         throw Napi::Error::New(info.Env(), oss.str());
     }
 
