@@ -148,7 +148,7 @@ Napi::Value PCRE2::ExecImpl(Napi::Env env, const Napi::String &subject, uint32_t
         reinterpret_cast<PCRE2_SPTR>(subjectStr.c_str()),
         subjectStr.length(),
         m_lastIndex,
-        m_options | (m_sticky ? PCRE2_ANCHORED : 0),
+        options | (m_sticky ? PCRE2_ANCHORED : 0),
         m_matchData,
         nullptr
     );
@@ -159,8 +159,10 @@ Napi::Value PCRE2::ExecImpl(Napi::Env env, const Napi::String &subject, uint32_t
             return env.Null();
         }
 
+        PCRE2_UCHAR errorBuffer[256];
+        pcre2_get_error_message(rc, errorBuffer, sizeof(errorBuffer));
         std::ostringstream oss;
-        oss << "PCRE2 matching error: " << rc;
+        oss << "PCRE2 matching error " << rc << " :" << errorBuffer;
         throw Napi::Error::New(env, oss.str());
     }
 
@@ -174,6 +176,11 @@ Napi::Value PCRE2::ExecImpl(Napi::Env env, const Napi::String &subject, uint32_t
     }
 
     for (PCRE2_SIZE i = 0; i < rc; i++) {
+        if (ovector[2*i] == PCRE2_UNSET) {
+            result[i] = env.Undefined();
+            continue;
+        }
+
         const char16_t *substring_start = subjectStr.c_str() + ovector[2*i];
         PCRE2_SIZE substring_length = ovector[2*i+1] - ovector[2*i];
         result[i] = Napi::String::New(env, substring_start, substring_length);
@@ -246,7 +253,7 @@ Napi::Value PCRE2::ExecImpl(Napi::Env env, const Napi::String &subject, uint32_t
     return scope.Escape(result);
 }
 
-void PCRE2::HandleEmptyMatch(Napi::Env env, Napi::Array match, const std::u16string &subjectStr)
+bool PCRE2::HandleEmptyMatch(Napi::Env env, Napi::Array match, const std::u16string &subjectStr)
 {
     // TODO The behavivor here differs between JS RegExp and PCRE2
     //  PCRE2 retries the match at the same position but disallowing empty match and anchored (PCRE2_NOTEMPTY_ATSTART | PCRE2_ANCHORED),
@@ -254,6 +261,10 @@ void PCRE2::HandleEmptyMatch(Napi::Env env, Napi::Array match, const std::u16str
     //
     //  This is currently the JS behavior
     if (match.As<Napi::Array>().Get(0u).As<Napi::String>().Utf16Value().empty()) {
+        if (match.Get("index").As<Napi::Number>().Int64Value() == subjectStr.length()) {
+            return false;
+        }
+
         m_lastIndex++;
 
         if (m_crlfIsNewline &&
@@ -272,6 +283,8 @@ void PCRE2::HandleEmptyMatch(Napi::Env env, Napi::Array match, const std::u16str
             }
         }
     }
+
+    return true;
 }
 
 Napi::Value PCRE2::Exec(const Napi::CallbackInfo &info)
@@ -315,8 +328,10 @@ Napi::Value PCRE2::Test(const Napi::CallbackInfo &info)
             return Napi::Boolean::New(info.Env(), false);
         }
 
+        PCRE2_UCHAR errorBuffer[256];
+        pcre2_get_error_message(rc, errorBuffer, sizeof(errorBuffer));
         std::ostringstream oss;
-        oss << "PCRE2 matching error: " << rc;
+        oss << "PCRE2 matching error " << rc << " :" << errorBuffer;
         throw Napi::Error::New(info.Env(), oss.str());
     }
 
@@ -364,7 +379,7 @@ Napi::Value PCRE2::Match(const Napi::CallbackInfo &info)
     }
 
     Napi::Array result = Napi::Array::New(info.Env());
-    for (uint32_t i; ; i++) {
+    while (true) {
         Napi::Array match = ExecImpl(info.Env(), subject).As<Napi::Array>();
         if (match.IsNull()) {
             break;
@@ -372,7 +387,9 @@ Napi::Value PCRE2::Match(const Napi::CallbackInfo &info)
 
         instanceData->ArrayPush.Call(result, { match.Get(0u) });
 
-        HandleEmptyMatch(info.Env(), match, subjectStr);
+        if (!HandleEmptyMatch(info.Env(), match, subjectStr)) {
+            break;
+        }
     }
 
     return result;
@@ -402,7 +419,7 @@ Napi::Value PCRE2::Search(const Napi::CallbackInfo &info)
     }
 
     Napi::Array result = Napi::Array::New(info.Env());
-    for (uint32_t i; ; i++) {
+    while (true) {
         Napi::Array match = ExecImpl(info.Env(), subject).As<Napi::Array>();
         if (match.IsNull()) {
             break;
@@ -410,7 +427,9 @@ Napi::Value PCRE2::Search(const Napi::CallbackInfo &info)
 
         instanceData->ArrayPush.Call(result, { match.Get("index") });
 
-        HandleEmptyMatch(info.Env(), match, subjectStr);
+        if (!HandleEmptyMatch(info.Env(), match, subjectStr)) {
+            break;
+        }
     }
 
     return result;

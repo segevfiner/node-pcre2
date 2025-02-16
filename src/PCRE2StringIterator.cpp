@@ -18,6 +18,7 @@ Napi::Object PCRE2StringIterator::Init(Napi::Env env, Napi::Object exports)
 
 PCRE2StringIterator::PCRE2StringIterator(const Napi::CallbackInfo &info)
     : Napi::ObjectWrap<PCRE2StringIterator>(info)
+    , m_done(false)
 {
     m_pcre2Ref = Napi::Persistent(info[0].As<Napi::Object>());
     m_pcre2 = PCRE2::Unwrap(m_pcre2Ref.Value());
@@ -38,15 +39,25 @@ Napi::Value PCRE2StringIterator::Iterator(const Napi::CallbackInfo &info)
 
 Napi::Value PCRE2StringIterator::Next(const Napi::CallbackInfo &info)
 {
+    Napi::Object result = Napi::Object::New(info.Env());
+
+    if (m_done) {
+        result["done"] = Napi::Boolean::New(info.Env(), true);
+        return result;
+    }
+
     Napi::Value value = m_pcre2->ExecImpl(info.Env(), m_private.Get("subject").As<Napi::String>());
 
-    m_pcre2->HandleEmptyMatch(info.Env(), value.As<Napi::Array>(), m_subject);
-
-    Napi::Object result = Napi::Object::New(info.Env());
-    if (!value.IsNull()) {
-        result["value"] = value;
-    } else {
+    if (value.IsNull()) {
+        m_done = true;
         result["done"] = Napi::Boolean::New(info.Env(), true);
+        return result;
+    }
+
+    result["value"] = value;
+
+    if (!m_pcre2->HandleEmptyMatch(info.Env(), value.As<Napi::Array>(), m_subject)) {
+        m_done = true;
     }
 
     return result;

@@ -22,6 +22,7 @@ private:
     std::u16string m_subject;
     Napi::ObjectReference m_pcre2Ref;
     PCRE2 *m_pcre2;
+    bool m_done;
 };
 
 #endif // NODE_PCRE2_MATCH_ALL_ITERATOR_H_

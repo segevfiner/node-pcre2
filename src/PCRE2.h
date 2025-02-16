@@ -11,7 +11,7 @@ public:
     virtual ~PCRE2();
 
     Napi::Value ExecImpl(Napi::Env env, const Napi::String &subject, uint32_t options = 0);
-    void HandleEmptyMatch(Napi::Env env, Napi::Array match, const std::u16string &subjectStr);
+    bool HandleEmptyMatch(Napi::Env env, Napi::Array match, const std::u16string &subjectStr);
 
     PCRE2(const PCRE2&) = delete;
     PCRE2& operator=(const PCRE2&) = delete;
