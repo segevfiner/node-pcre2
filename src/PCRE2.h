@@ -40,6 +40,7 @@ private:
 
     static Napi::Value Species(const Napi::CallbackInfo &info);
 
+    void AdvanceLastIndex(const std::u16string &subjectStr);
     void ParseFlags(Napi::Env env, const std::string &flags);
     size_t PatternSize(Napi::Env env) const;
 

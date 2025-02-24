@@ -30,7 +30,7 @@ Napi::Object PCRE2::Init(Napi::Env env, Napi::Object exports) {
         InstanceAccessor<&PCRE2::Sticky>("sticky"),
         InstanceAccessor<&PCRE2::Unicode>("unicode"),
         InstanceAccessor<&PCRE2::UnicodeSets>("unicodeSets"),
-        StaticMethod<&PCRE2::Species>(instanceData->Symbol.Get("species").As<Napi::Symbol>()),
+        StaticAccessor<&PCRE2::Species>(instanceData->Symbol.Get("species").As<Napi::Symbol>()),
     });
 
     instanceData->PCRE2 = Napi::Persistent(func);
@@ -148,7 +148,7 @@ Napi::Value PCRE2::ExecImpl(Napi::Env env, const Napi::String &subject, uint32_t
         m_re,
         reinterpret_cast<PCRE2_SPTR>(subjectStr.c_str()),
         subjectStr.length(),
-        m_lastIndex,
+        !m_global && !m_sticky ? 0 : m_lastIndex,
         options | (m_sticky ? PCRE2_ANCHORED : 0),
         m_matchData,
         nullptr
@@ -156,7 +156,9 @@ Napi::Value PCRE2::ExecImpl(Napi::Env env, const Napi::String &subject, uint32_t
     // TODO Might want to report pcre2_get_match_data_heapframes_size to AdjustExternalMemory
     if (rc < 0) {
         if (rc == PCRE2_ERROR_NOMATCH) {
-            m_lastIndex = 0;
+            if (m_global || m_sticky) {
+                m_lastIndex = 0;
+            }
             return env.Null();
         }
 
@@ -263,27 +265,11 @@ bool PCRE2::HandleEmptyMatch(Napi::Env env, Napi::Array match, const std::u16str
     //
     //  This is currently the JS behavior
     if (match.As<Napi::Array>().Get(0u).As<Napi::String>().Utf16Value().empty()) {
-        if (match.Get("index").As<Napi::Number>().Int64Value() == subjectStr.length()) {
+        if (m_lastIndex == subjectStr.length()) {
             return false;
         }
 
-        m_lastIndex++;
-
-        if (m_crlfIsNewline &&
-            m_lastIndex < subjectStr.length() - 1 && // We are at CRLF
-            subjectStr[m_lastIndex] == '\r' &&
-            subjectStr[m_lastIndex - 1] == '\n') {
-                // Advance by one more.
-                m_lastIndex++;
-        } else if (m_utf8) {
-            // Otherwise, ensure we advance a whole UTF-8 character
-            while (m_lastIndex < subjectStr.length()) {
-                if ((subjectStr[m_lastIndex] & 0xc0) != 0x80) {
-                    break;
-                }
-                m_lastIndex++;
-            }
-        }
+        AdvanceLastIndex(subjectStr);
     }
 
     return true;
@@ -294,11 +280,8 @@ Napi::Value PCRE2::Exec(const Napi::CallbackInfo &info)
     if (info.Length() < 1) {
         throw Napi::TypeError::New(info.Env(), "Wrong number of arguments");
     }
-    if (!info[0].IsString()) {
-        throw Napi::TypeError::New(info.Env(), "Expected a string");
-    }
 
-    return ExecImpl(info.Env(), info[0].As<Napi::String>());
+    return ExecImpl(info.Env(), info[0].ToString());
 }
 
 Napi::Value PCRE2::Test(const Napi::CallbackInfo &info)
@@ -306,10 +289,8 @@ Napi::Value PCRE2::Test(const Napi::CallbackInfo &info)
     if (info.Length() < 1) {
         throw Napi::TypeError::New(info.Env(), "Wrong number of arguments");
     }
-    if (!info[0].IsString()) {
-        throw Napi::TypeError::New(info.Env(), "Expected a string");
-    }
 
+    Napi::String subject = info[0].ToString();
     std::u16string subjectStr = info[0].As<Napi::String>().Utf16Value();
 
     TierUpTick(info.Env());
@@ -370,11 +351,8 @@ Napi::Value PCRE2::Match(const Napi::CallbackInfo &info)
     if (info.Length() < 1) {
         throw Napi::TypeError::New(info.Env(), "Wrong number of arguments");
     }
-    if (!info[0].IsString()) {
-        throw Napi::TypeError::New(info.Env(), "Expected a string");
-    }
 
-    Napi::String subject = info[0].As<Napi::String>();
+    Napi::String subject = info[0].ToString();
     std::u16string subjectStr = subject.Utf16Value();
 
     if (!m_global) {
@@ -405,51 +383,109 @@ Napi::Value PCRE2::Search(const Napi::CallbackInfo &info)
     if (info.Length() < 1) {
         throw Napi::TypeError::New(info.Env(), "Wrong number of arguments");
     }
-    if (!info[0].IsString()) {
-        throw Napi::TypeError::New(info.Env(), "Expected a string");
-    }
 
-    Napi::String subject = info[0].As<Napi::String>();
+    Napi::String subject = info[0].ToString();
     std::u16string subjectStr = subject.Utf16Value();
 
-    if (!m_global) {
-        Napi::Array match = ExecImpl(info.Env(), subject).As<Napi::Array>();
-        if (match.IsNull()) {
-            return Napi::Number::New(info.Env(), -1);
-        }
+    size_t lastIndex = m_lastIndex;
 
-        return match.Get("index");
+    m_lastIndex = 0;
+    Napi::Array match = ExecImpl(info.Env(), subject).As<Napi::Array>();
+    m_lastIndex = lastIndex;
+    if (match.IsNull()) {
+        return Napi::Number::New(info.Env(), -1);
     }
 
-    Napi::Array result = Napi::Array::New(info.Env());
-    while (true) {
-        Napi::Array match = ExecImpl(info.Env(), subject).As<Napi::Array>();
-        if (match.IsNull()) {
-            break;
-        }
-
-        instanceData->ArrayPush.Call(result, { match.Get("index") });
-
-        if (!HandleEmptyMatch(info.Env(), match, subjectStr)) {
-            break;
-        }
-    }
-
-    return result;
+    return match.Get("index");
 }
 
 Napi::Value PCRE2::Split(const Napi::CallbackInfo &info)
 {
-    return Napi::Value();
+    InstanceData *instanceData = info.Env().GetInstanceData<InstanceData>();
+
+    if (info.Length() < 1) {
+        throw Napi::TypeError::New(info.Env(), "Wrong number of arguments");
+    }
+    Napi::String subject = info[0].ToString();
+    std::u16string subjectStr = subject.Utf16Value();
+
+    uint32_t limit = UINT32_MAX;
+    if (info.Length() >= 2 && !info[1].IsUndefined()) {
+        limit = info[1].ToNumber().Uint32Value();
+    }
+
+    Napi::Array result = Napi::Array::New(info.Env());
+    if (limit == 0) {
+        return result;
+    }
+
+    // TODO Not exactly right, needs to handle the case where it doesn't return a PCRE2, for inheritance
+    Napi::Function speciesCtor = Value().Get("constructor").As<Napi::Object>()
+        .Get(instanceData->Symbol.Get("species").As<Napi::Symbol>()).As<Napi::Function>();
+    std::string newFlags = m_flags;
+    if (m_flags.find("y") == -1) {
+        newFlags += "y";
+    }
+    PCRE2 *splitter = PCRE2::Unwrap(speciesCtor.New({ Value(), Napi::String::New(info.Env(), newFlags) }));
+
+    if (subjectStr.empty()) {
+        Napi::Array match = splitter->ExecImpl(info.Env(), subject).As<Napi::Array>();
+        if (match.IsNull()) {
+            return result;
+        }
+
+        result[0u] = subject;
+        return result;
+    }
+
+    size_t p = 0;
+    size_t q = p;
+
+    while (q < subjectStr.size()) {
+        splitter->m_lastIndex = q;
+        Napi::Array match = splitter->ExecImpl(info.Env(), subject).As<Napi::Array>();
+        if (match.IsNull()) {
+            splitter->m_lastIndex = q;
+            splitter->AdvanceLastIndex(subjectStr);
+            q = splitter->m_lastIndex;
+        } else {
+            size_t e = std::min(splitter->m_lastIndex, subjectStr.size());
+            if (e == p) {
+                splitter->m_lastIndex = q;
+                splitter->AdvanceLastIndex(subjectStr);
+                q = splitter->m_lastIndex;
+            } else {
+                instanceData->ArrayPush.Call(result, { Napi::String::New(info.Env(), subjectStr.c_str() + p, q - p) });
+                if (result.Length() == limit) {
+                    return result;
+                }
+
+                p = e;
+
+                size_t numberOfCaptures = std::max(match.Length() - 1, 0u);
+                for (size_t i = 1; i < numberOfCaptures; i++) {
+                    instanceData->ArrayPush.Call(result, { match.Get(i) });
+                    if (result.Length() == limit) {
+                        return result;
+                    }
+                }
+
+                q = p;
+            }
+        }
+    }
+
+    instanceData->ArrayPush.Call(result, { Napi::String::New(info.Env(), subjectStr.c_str() + p, subjectStr.size() - p) });
+    return result;
 }
 
 Napi::Value PCRE2::MatchAll(const Napi::CallbackInfo &info)
 {
     InstanceData *instanceData = info.Env().GetInstanceData<InstanceData>();
 
+    // TODO Not exactly right, needs to handle the case where it doesn't return a PCRE2, for inheritance
     Napi::Function speciesCtor = Value().Get("constructor").As<Napi::Object>()
-        .Get(instanceData->Symbol.Get("species").As<Napi::Symbol>()).As<Napi::Function>()
-        .Call({}).As<Napi::Function>();
+        .Get(instanceData->Symbol.Get("species").As<Napi::Symbol>()).As<Napi::Function>();
     PCRE2 *matcher = PCRE2::Unwrap(speciesCtor.New({ Value(), Napi::String::New(info.Env(), m_flags) }));
     matcher->m_lastIndex = m_lastIndex;
 
@@ -505,7 +541,7 @@ void PCRE2::ParseFlags(Napi::Env env, const std::string &flags)
             case 'y':
                 m_sticky = true;
                 break;
-            // TODO
+            // TODO PCRE2 extra flags
             // case 'x':
             //     if (m_options | PCRE2_EXTENDED) {
             //         m_options |= PCRE2_EXTENDED_MORE;
@@ -515,10 +551,39 @@ void PCRE2::ParseFlags(Napi::Env env, const std::string &flags)
             // case 'n':
             //    m_options |= PCRE2_NO_AUTO_CAPTURE;
             //    break;
+            // TODO Add aD, aS, aW, aP, aT, a, r, J, U
             // TODO Add flag to disable ECMAScript compat and act more like PCRE2
+            // case 'p':
+            //     m_pcre2 = true;
+            //     break;
             // TODO Add flag to disable JIT or force immediate JIT?
             default:
                 throw Napi::Error::New(env, "Unsupported flag: " + std::string{flag});
+        }
+    }
+}
+
+
+void PCRE2::AdvanceLastIndex(const std::u16string &subjectStr) {
+    if (m_lastIndex == subjectStr.length()) {
+        return;
+    }
+
+    m_lastIndex++;
+
+    if (m_crlfIsNewline &&
+        m_lastIndex < subjectStr.length() - 1 && // We are at CRLF
+        subjectStr[m_lastIndex] == '\r' &&
+        subjectStr[m_lastIndex - 1] == '\n') {
+            // Advance by one more.
+            m_lastIndex++;
+    } else if (m_utf8) {
+        // Otherwise, ensure we advance a whole UTF-8 character
+        while (m_lastIndex < subjectStr.length()) {
+            if ((subjectStr[m_lastIndex] & 0xc0) != 0x80) {
+                break;
+            }
+            m_lastIndex++;
         }
     }
 }
@@ -606,6 +671,5 @@ Napi::Value PCRE2::UnicodeSets(const Napi::CallbackInfo &info)
 
 Napi::Value PCRE2::Species(const Napi::CallbackInfo &info)
 {
-    InstanceData *instanceData = info.Env().GetInstanceData<InstanceData>();
-    return instanceData->PCRE2.Value();
+    return info.This();
 }
