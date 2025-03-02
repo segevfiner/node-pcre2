@@ -30,6 +30,7 @@ Napi::Object PCRE2::Init(Napi::Env env, Napi::Object exports) {
         InstanceAccessor<&PCRE2::Sticky>("sticky"),
         InstanceAccessor<&PCRE2::Unicode>("unicode"),
         InstanceAccessor<&PCRE2::UnicodeSets>("unicodeSets"),
+        InstanceAccessor<&PCRE2::PCRE2Mode>("pcre2"),
         StaticAccessor<&PCRE2::Species>(instanceData->Symbol.Get("species").As<Napi::Symbol>()),
     });
 
@@ -140,8 +141,7 @@ PCRE2::~PCRE2() {
     Napi::MemoryManagement::AdjustExternalMemory(Env(), -m_size);
 }
 
-Napi::Value PCRE2::ExecImpl(Napi::Env env, const Napi::String &subject, uint32_t options /* = 0 */)
-{
+Napi::Value PCRE2::ExecImpl(Napi::Env env, const Napi::String &subject, uint32_t options /* = 0 */) {
     Napi::EscapableHandleScope scope(env);
     InstanceData *instanceData = env.GetInstanceData<InstanceData>();
 
@@ -272,26 +272,7 @@ Napi::Value PCRE2::ExecImpl(Napi::Env env, const Napi::String &subject, uint32_t
     return scope.Escape(result);
 }
 
-bool PCRE2::HandleEmptyMatch(Napi::Env env, Napi::Array match, const std::u16string &subjectStr)
-{
-    // TODO The behavivor here differs between JS RegExp and PCRE2
-    //  PCRE2 retries the match at the same position but disallowing empty match and anchored (PCRE2_NOTEMPTY_ATSTART | PCRE2_ANCHORED),
-    //  while JS immediately advances the index
-    //
-    //  This is currently the JS behavior
-    if (match.As<Napi::Array>().Get(0u).As<Napi::String>().Utf16Value().empty()) {
-        if (m_lastIndex == subjectStr.length()) {
-            return false;
-        }
-
-        m_lastIndex = AdvanceStringIndex(subjectStr, m_lastIndex);
-    }
-
-    return true;
-}
-
-Napi::Value PCRE2::Exec(const Napi::CallbackInfo &info)
-{
+Napi::Value PCRE2::Exec(const Napi::CallbackInfo &info) {
     if (info.Length() < 1) {
         throw Napi::TypeError::New(info.Env(), "Wrong number of arguments");
     }
@@ -299,8 +280,7 @@ Napi::Value PCRE2::Exec(const Napi::CallbackInfo &info)
     return ExecImpl(info.Env(), info[0].ToString());
 }
 
-Napi::Value PCRE2::Test(const Napi::CallbackInfo &info)
-{
+Napi::Value PCRE2::Test(const Napi::CallbackInfo &info) {
     if (info.Length() < 1) {
         throw Napi::TypeError::New(info.Env(), "Wrong number of arguments");
     }
@@ -343,8 +323,7 @@ Napi::Value PCRE2::Test(const Napi::CallbackInfo &info)
     return Napi::Boolean::New(info.Env(), true);
 }
 
-Napi::Value PCRE2::ToString(const Napi::CallbackInfo &info)
-{
+Napi::Value PCRE2::ToString(const Napi::CallbackInfo &info) {
     std::ostringstream oss;
 
     oss << "pcre2";
@@ -359,8 +338,7 @@ Napi::Value PCRE2::ToString(const Napi::CallbackInfo &info)
     return Napi::String::New(info.Env(), oss.str());
 }
 
-Napi::Value PCRE2::Match(const Napi::CallbackInfo &info)
-{
+Napi::Value PCRE2::Match(const Napi::CallbackInfo &info) {
     InstanceData *instanceData = info.Env().GetInstanceData<InstanceData>();
 
     if (info.Length() < 1) {
@@ -375,29 +353,43 @@ Napi::Value PCRE2::Match(const Napi::CallbackInfo &info)
     }
 
     m_lastIndex = 0;
+    uint32_t options = 0;
     Napi::Array result = Napi::Array::New(info.Env());
     while (true) {
-        Napi::Array match = ExecImpl(info.Env(), subject).As<Napi::Array>();
+        Napi::Array match = ExecImpl(info.Env(), subject, options).As<Napi::Array>();
         if (match.IsNull()) {
             if (result.Length() == 0) {
                 return info.Env().Null();
             }
 
-            break;
+            if (options == 0) {
+                break;
+            }
+
+            m_lastIndex = AdvanceStringIndex(subjectStr, m_lastIndex);
+            continue;
         }
 
         instanceData->ArrayPush.Call(result, { match.Get(0u) });
 
-        if (!HandleEmptyMatch(info.Env(), match, subjectStr)) {
-            break;
+        options = 0;
+        if (match.Get(0u).As<Napi::String>().Utf16Value().empty()) {
+            if (m_lastIndex == subjectStr.length()) {
+                break;
+            }
+
+            if (m_pcre2) {
+                options = PCRE2_NOTEMPTY_ATSTART | PCRE2_ANCHORED;
+            } else {
+                m_lastIndex = AdvanceStringIndex(subjectStr, m_lastIndex);
+            }
         }
     }
 
     return result;
 }
 
-Napi::Value PCRE2::Search(const Napi::CallbackInfo &info)
-{
+Napi::Value PCRE2::Search(const Napi::CallbackInfo &info) {
     InstanceData *instanceData = info.Env().GetInstanceData<InstanceData>();
 
     if (info.Length() < 1) {
@@ -419,8 +411,7 @@ Napi::Value PCRE2::Search(const Napi::CallbackInfo &info)
     return match.Get("index");
 }
 
-Napi::Value PCRE2::Split(const Napi::CallbackInfo &info)
-{
+Napi::Value PCRE2::Split(const Napi::CallbackInfo &info) {
     InstanceData *instanceData = info.Env().GetInstanceData<InstanceData>();
 
     if (info.Length() < 1) {
@@ -493,8 +484,7 @@ Napi::Value PCRE2::Split(const Napi::CallbackInfo &info)
     return result;
 }
 
-Napi::Value PCRE2::MatchAll(const Napi::CallbackInfo &info)
-{
+Napi::Value PCRE2::MatchAll(const Napi::CallbackInfo &info) {
     InstanceData *instanceData = info.Env().GetInstanceData<InstanceData>();
 
     Napi::Function speciesCtor = SpeciesConstructor(info.Env(), Value(), instanceData->PCRE2.Value());
@@ -504,19 +494,16 @@ Napi::Value PCRE2::MatchAll(const Napi::CallbackInfo &info)
     return instanceData->PCRE2StringIterator.New({ matcher->Value(), info[0] });
 }
 
-Napi::Value PCRE2::Replace(const Napi::CallbackInfo &info)
-{
+Napi::Value PCRE2::Replace(const Napi::CallbackInfo &info) {
     // TODO This one can be troublesome as pcre2_substitute doesn't handle dynamic replacement by the callout
     return Napi::Value();
 }
 
-Napi::Value PCRE2::GetLastIndex(const Napi::CallbackInfo &info)
-{
+Napi::Value PCRE2::GetLastIndex(const Napi::CallbackInfo &info) {
     return Napi::Number::New(info.Env(), m_lastIndex);
 }
 
-void PCRE2::SetLastIndex(const Napi::CallbackInfo &info, const Napi::Value &value)
-{
+void PCRE2::SetLastIndex(const Napi::CallbackInfo &info, const Napi::Value &value) {
     if (!value.IsNumber()) {
         throw Napi::TypeError::New(info.Env(), "Expected a number");
     }
@@ -524,8 +511,7 @@ void PCRE2::SetLastIndex(const Napi::CallbackInfo &info, const Napi::Value &valu
     m_lastIndex = value.As<Napi::Number>().Int64Value();
 }
 
-void PCRE2::ParseFlags(Napi::Env env, const std::string &flags)
-{
+void PCRE2::ParseFlags(Napi::Env env, const std::string &flags) {
     // TODO We can support a bunch of other flags that are supoorted by PCRE2
     for (char flag : flags) {
         switch (flag) {
@@ -601,8 +587,23 @@ size_t PCRE2::AdvanceStringIndex(const std::u16string &subjectStr, size_t index)
     return index;
 }
 
-size_t PCRE2::PatternSize(Napi::Env env) const
-{
+bool PCRE2::Global() const {
+    return m_global;
+}
+
+size_t PCRE2::LastIndex() const {
+    return m_lastIndex;
+}
+
+void PCRE2::SetLastIndex(size_t lastIndex) {
+    m_lastIndex = lastIndex;
+}
+
+bool PCRE2::PCRE2Mode() const {
+    return m_pcre2;
+}
+
+size_t PCRE2::PatternSize(Napi::Env env) const {
     size_t size;
     int rc = pcre2_pattern_info(m_re, PCRE2_INFO_SIZE, &size);
     if (rc < 0) {
@@ -642,53 +643,47 @@ Napi::Value PCRE2::Flags(const Napi::CallbackInfo &info) {
     return Napi::String::New(info.Env(), m_flags);
 }
 
-Napi::Value PCRE2::DotAll(const Napi::CallbackInfo &info)
-{
+Napi::Value PCRE2::DotAll(const Napi::CallbackInfo &info) {
     return Napi::Boolean::New(info.Env(), m_options & PCRE2_DOTALL);
 }
 
-Napi::Value PCRE2::Global(const Napi::CallbackInfo &info)
-{
+Napi::Value PCRE2::Global(const Napi::CallbackInfo &info) {
     return Napi::Boolean::New(info.Env(), m_global);
 }
 
-Napi::Value PCRE2::HasIndices(const Napi::CallbackInfo &info)
-{
+Napi::Value PCRE2::HasIndices(const Napi::CallbackInfo &info) {
     return Napi::Boolean::New(info.Env(), m_hasIndices);
 }
 
-Napi::Value PCRE2::IgnoreCase(const Napi::CallbackInfo &info)
-{
+Napi::Value PCRE2::IgnoreCase(const Napi::CallbackInfo &info) {
     return Napi::Boolean::New(info.Env(), m_options & PCRE2_CASELESS);
 }
 
-Napi::Value PCRE2::Multiline(const Napi::CallbackInfo &info)
-{
+Napi::Value PCRE2::Multiline(const Napi::CallbackInfo &info) {
     return Napi::Boolean::New(info.Env(), m_options & PCRE2_MULTILINE);
 }
 
-Napi::Value PCRE2::Sticky(const Napi::CallbackInfo &info)
-{
+Napi::Value PCRE2::Sticky(const Napi::CallbackInfo &info) {
     return Napi::Boolean::New(info.Env(), m_sticky);
 }
 
-Napi::Value PCRE2::Unicode(const Napi::CallbackInfo &info)
-{
+Napi::Value PCRE2::Unicode(const Napi::CallbackInfo &info) {
     return Napi::Boolean::New(info.Env(), m_options & PCRE2_UTF);
 }
 
-Napi::Value PCRE2::UnicodeSets(const Napi::CallbackInfo &info)
-{
+Napi::Value PCRE2::UnicodeSets(const Napi::CallbackInfo &info) {
     return Napi::Boolean::New(info.Env(), m_options & PCRE2_ALT_EXTENDED_CLASS);
 }
 
-Napi::Value PCRE2::Species(const Napi::CallbackInfo &info)
-{
+Napi::Value PCRE2::PCRE2Mode(const Napi::CallbackInfo &info) {
+    return Napi::Boolean::New(info.Env(), m_pcre2);
+}
+
+Napi::Value PCRE2::Species(const Napi::CallbackInfo &info) {
     return info.This();
 }
 
-Napi::Function PCRE2::SpeciesConstructor(Napi::Env env, const Napi::Object &obj, const Napi::Function &defaultConstructor)
-{
+Napi::Function PCRE2::SpeciesConstructor(Napi::Env env, const Napi::Object &obj, const Napi::Function &defaultConstructor) {
     Napi::EscapableHandleScope scope(env);
 
     Napi::Value ctor = obj.Get("constructor");

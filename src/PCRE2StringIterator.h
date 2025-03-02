@@ -22,6 +22,7 @@ private:
     std::u16string m_subject;
     Napi::ObjectReference m_pcre2Ref;
     PCRE2 *m_pcre2;
+    uint32_t m_options;
     bool m_done;
 };
 

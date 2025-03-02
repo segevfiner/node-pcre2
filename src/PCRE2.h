@@ -11,7 +11,11 @@ public:
     virtual ~PCRE2();
 
     Napi::Value ExecImpl(Napi::Env env, const Napi::String &subject, uint32_t options = 0);
-    bool HandleEmptyMatch(Napi::Env env, Napi::Array match, const std::u16string &subjectStr);
+    size_t AdvanceStringIndex(const std::u16string &subjectStr, size_t index);
+    bool Global() const;
+    bool PCRE2Mode() const;
+    size_t LastIndex() const;
+    void SetLastIndex(size_t lastIndex);
 
     PCRE2(const PCRE2&) = delete;
     PCRE2& operator=(const PCRE2&) = delete;
@@ -37,11 +41,11 @@ private:
     Napi::Value Sticky(const Napi::CallbackInfo &info);
     Napi::Value Unicode(const Napi::CallbackInfo &info);
     Napi::Value UnicodeSets(const Napi::CallbackInfo &info);
+    Napi::Value PCRE2Mode(const Napi::CallbackInfo &info);
 
     static Napi::Value Species(const Napi::CallbackInfo &info);
     static Napi::Function SpeciesConstructor(Napi::Env env, const Napi::Object &obj, const Napi::Function &defaultConstructor);
 
-    size_t AdvanceStringIndex(const std::u16string &subjectStr, size_t index);
     void ParseFlags(Napi::Env env, const std::string &flags);
     size_t PatternSize(Napi::Env env) const;
 
