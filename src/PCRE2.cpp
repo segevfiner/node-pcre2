@@ -42,10 +42,11 @@ Napi::Object PCRE2::Init(Napi::Env env, Napi::Object exports) {
 PCRE2::PCRE2(const Napi::CallbackInfo &info)
     : Napi::ObjectWrap<PCRE2>(info)
     // Flags to try and behave more closely to JS RegExp, though we might want to make this configurable
-    , m_options(PCRE2_ALT_BSUX | PCRE2_DOLLAR_ENDONLY | PCRE2_MATCH_UNSET_BACKREF)
+    , m_options(0)
     , m_global(false)
     , m_sticky(false)
     , m_hasIndices(false)
+    , m_pcre2(false)
     , m_lastIndex(0)
     , m_tierUpTicks(1)
 {
@@ -88,6 +89,10 @@ PCRE2::PCRE2(const Napi::CallbackInfo &info)
     }
 
     ParseFlags(info.Env(), m_flags);
+
+    if (!m_pcre2) {
+        m_options = PCRE2_ALT_BSUX | PCRE2_DOLLAR_ENDONLY | PCRE2_MATCH_UNSET_BACKREF;
+    }
 
     int errornumber;
     size_t erroroffset;
@@ -137,11 +142,14 @@ PCRE2::~PCRE2() {
 
 Napi::Value PCRE2::ExecImpl(Napi::Env env, const Napi::String &subject, uint32_t options /* = 0 */)
 {
+    Napi::EscapableHandleScope scope(env);
     InstanceData *instanceData = env.GetInstanceData<InstanceData>();
 
     std::u16string subjectStr = subject.Utf16Value();
 
-    Napi::EscapableHandleScope scope(env);
+    if (!m_global && !m_sticky) {
+        m_lastIndex = 0;
+    }
 
     TierUpTick(env);
     int rc = pcre2_match(
@@ -171,7 +179,14 @@ Napi::Value PCRE2::ExecImpl(Napi::Env env, const Napi::String &subject, uint32_t
     }
 
     PCRE2_SIZE *ovector = pcre2_get_ovector_pointer(m_matchData);
+
+    if (m_global || m_sticky) {
+        m_lastIndex = ovector[1];
+    }
+
     Napi::Array result = Napi::Array::New(env, rc);
+    result["index"] = ovector[0];
+    result["input"] = subject;
 
     Napi::Array indices;
     if (m_hasIndices) {
@@ -182,6 +197,9 @@ Napi::Value PCRE2::ExecImpl(Napi::Env env, const Napi::String &subject, uint32_t
     for (PCRE2_SIZE i = 0; i < rc; i++) {
         if (ovector[2*i] == PCRE2_UNSET) {
             result[i] = env.Undefined();
+            if (m_hasIndices) {
+                indices[i] = env.Undefined();
+            }
             continue;
         }
 
@@ -196,9 +214,6 @@ Napi::Value PCRE2::ExecImpl(Napi::Env env, const Napi::String &subject, uint32_t
             indices[i] = indice;
         }
     }
-
-    result["index"] = ovector[0];
-    result["input"] = subject;
 
     uint32_t nameCount;
     pcre2_pattern_info(
@@ -238,6 +253,10 @@ Napi::Value PCRE2::ExecImpl(Napi::Env env, const Napi::String &subject, uint32_t
             tabptr += nameEntrySize;
 
             if (m_hasIndices) {
+                if (ovector[2*n] == PCRE2_UNSET) {
+                    groupsIndices.Set(groupName, env.Undefined());
+                    continue;
+                }
                 Napi::Array indice = Napi::Array::New(env, 2);
                 indice[0u] = ovector[2*n];
                 indice[1] = ovector[2*n+1];
@@ -248,10 +267,6 @@ Napi::Value PCRE2::ExecImpl(Napi::Env env, const Napi::String &subject, uint32_t
         result["groups"] = groups;
     } else {
         result["groups"] = env.Undefined();
-    }
-
-    if (m_global || m_sticky) {
-        m_lastIndex = ovector[1];
     }
 
     return scope.Escape(result);
@@ -269,7 +284,7 @@ bool PCRE2::HandleEmptyMatch(Napi::Env env, Napi::Array match, const std::u16str
             return false;
         }
 
-        AdvanceLastIndex(subjectStr);
+        m_lastIndex = AdvanceStringIndex(subjectStr, m_lastIndex);
     }
 
     return true;
@@ -359,10 +374,15 @@ Napi::Value PCRE2::Match(const Napi::CallbackInfo &info)
         return ExecImpl(info.Env(), subject);
     }
 
+    m_lastIndex = 0;
     Napi::Array result = Napi::Array::New(info.Env());
     while (true) {
         Napi::Array match = ExecImpl(info.Env(), subject).As<Napi::Array>();
         if (match.IsNull()) {
+            if (result.Length() == 0) {
+                return info.Env().Null();
+            }
+
             break;
         }
 
@@ -419,9 +439,7 @@ Napi::Value PCRE2::Split(const Napi::CallbackInfo &info)
         return result;
     }
 
-    // TODO Not exactly right, needs to handle the case where it doesn't return a PCRE2, for inheritance
-    Napi::Function speciesCtor = Value().Get("constructor").As<Napi::Object>()
-        .Get(instanceData->Symbol.Get("species").As<Napi::Symbol>()).As<Napi::Function>();
+    Napi::Function speciesCtor = SpeciesConstructor(info.Env(), Value(), instanceData->PCRE2.Value());
     std::string newFlags = m_flags;
     if (m_flags.find("y") == -1) {
         newFlags += "y";
@@ -445,15 +463,11 @@ Napi::Value PCRE2::Split(const Napi::CallbackInfo &info)
         splitter->m_lastIndex = q;
         Napi::Array match = splitter->ExecImpl(info.Env(), subject).As<Napi::Array>();
         if (match.IsNull()) {
-            splitter->m_lastIndex = q;
-            splitter->AdvanceLastIndex(subjectStr);
-            q = splitter->m_lastIndex;
+            q = splitter->AdvanceStringIndex(subjectStr, q);
         } else {
             size_t e = std::min(splitter->m_lastIndex, subjectStr.size());
             if (e == p) {
-                splitter->m_lastIndex = q;
-                splitter->AdvanceLastIndex(subjectStr);
-                q = splitter->m_lastIndex;
+                q = splitter->AdvanceStringIndex(subjectStr, q);
             } else {
                 instanceData->ArrayPush.Call(result, { Napi::String::New(info.Env(), subjectStr.c_str() + p, q - p) });
                 if (result.Length() == limit) {
@@ -483,9 +497,7 @@ Napi::Value PCRE2::MatchAll(const Napi::CallbackInfo &info)
 {
     InstanceData *instanceData = info.Env().GetInstanceData<InstanceData>();
 
-    // TODO Not exactly right, needs to handle the case where it doesn't return a PCRE2, for inheritance
-    Napi::Function speciesCtor = Value().Get("constructor").As<Napi::Object>()
-        .Get(instanceData->Symbol.Get("species").As<Napi::Symbol>()).As<Napi::Function>();
+    Napi::Function speciesCtor = SpeciesConstructor(info.Env(), Value(), instanceData->PCRE2.Value());
     PCRE2 *matcher = PCRE2::Unwrap(speciesCtor.New({ Value(), Napi::String::New(info.Env(), m_flags) }));
     matcher->m_lastIndex = m_lastIndex;
 
@@ -552,10 +564,9 @@ void PCRE2::ParseFlags(Napi::Env env, const std::string &flags)
             //    m_options |= PCRE2_NO_AUTO_CAPTURE;
             //    break;
             // TODO Add aD, aS, aW, aP, aT, a, r, J, U
-            // TODO Add flag to disable ECMAScript compat and act more like PCRE2
-            // case 'p':
-            //     m_pcre2 = true;
-            //     break;
+            case 'p':
+                m_pcre2 = true;
+                break;
             // TODO Add flag to disable JIT or force immediate JIT?
             default:
                 throw Napi::Error::New(env, "Unsupported flag: " + std::string{flag});
@@ -564,28 +575,30 @@ void PCRE2::ParseFlags(Napi::Env env, const std::string &flags)
 }
 
 
-void PCRE2::AdvanceLastIndex(const std::u16string &subjectStr) {
-    if (m_lastIndex == subjectStr.length()) {
-        return;
+size_t PCRE2::AdvanceStringIndex(const std::u16string &subjectStr, size_t index) {
+    if (index == subjectStr.length()) {
+        return index;
     }
 
-    m_lastIndex++;
+    index++;
 
     if (m_crlfIsNewline &&
-        m_lastIndex < subjectStr.length() - 1 && // We are at CRLF
-        subjectStr[m_lastIndex] == '\r' &&
-        subjectStr[m_lastIndex - 1] == '\n') {
+        index < subjectStr.length() - 1 && // We are at CRLF
+        subjectStr[index] == '\r' &&
+        subjectStr[index - 1] == '\n') {
             // Advance by one more.
-            m_lastIndex++;
+            index++;
     } else if (m_utf8) {
         // Otherwise, ensure we advance a whole UTF-8 character
-        while (m_lastIndex < subjectStr.length()) {
-            if ((subjectStr[m_lastIndex] & 0xc0) != 0x80) {
+        while (index < subjectStr.length()) {
+            if ((subjectStr[index] & 0xc0) != 0x80) {
                 break;
             }
-            m_lastIndex++;
+            index++;
         }
     }
+
+    return index;
 }
 
 size_t PCRE2::PatternSize(Napi::Env env) const
@@ -672,4 +685,29 @@ Napi::Value PCRE2::UnicodeSets(const Napi::CallbackInfo &info)
 Napi::Value PCRE2::Species(const Napi::CallbackInfo &info)
 {
     return info.This();
+}
+
+Napi::Function PCRE2::SpeciesConstructor(Napi::Env env, const Napi::Object &obj, const Napi::Function &defaultConstructor)
+{
+    Napi::EscapableHandleScope scope(env);
+
+    Napi::Value ctor = obj.Get("constructor");
+    if (ctor.IsUndefined()) {
+        return defaultConstructor;
+    }
+
+    if (!ctor.IsObject()) {
+        throw Napi::TypeError::New(env, "constructor is not an object");
+    }
+
+    Napi::Value species = ctor.As<Napi::Object>().Get(env.GetInstanceData<InstanceData>()->Symbol.Get("species").As<Napi::Symbol>());
+    if (species.IsUndefined() || species.IsNull()) {
+        return defaultConstructor;
+    }
+
+    if (!species.IsFunction()) {
+        throw Napi::TypeError::New(env, "species is not a function");
+    }
+
+    return scope.Escape(species).As<Napi::Function>();
 }

@@ -39,8 +39,9 @@ private:
     Napi::Value UnicodeSets(const Napi::CallbackInfo &info);
 
     static Napi::Value Species(const Napi::CallbackInfo &info);
+    static Napi::Function SpeciesConstructor(Napi::Env env, const Napi::Object &obj, const Napi::Function &defaultConstructor);
 
-    void AdvanceLastIndex(const std::u16string &subjectStr);
+    size_t AdvanceStringIndex(const std::u16string &subjectStr, size_t index);
     void ParseFlags(Napi::Env env, const std::string &flags);
     size_t PatternSize(Napi::Env env) const;
 
@@ -52,6 +53,7 @@ private:
     bool m_global;
     bool m_sticky;
     bool m_hasIndices;
+    bool m_pcre2;
     pcre2_code *m_re;
     pcre2_match_data *m_matchData;
     size_t m_lastIndex;
