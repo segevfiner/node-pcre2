@@ -41,6 +41,9 @@ private:
     Napi::Value Sticky(const Napi::CallbackInfo &info);
     Napi::Value Unicode(const Napi::CallbackInfo &info);
     Napi::Value UnicodeSets(const Napi::CallbackInfo &info);
+    Napi::Value Extended(const Napi::CallbackInfo &info);
+    Napi::Value ExtendedMore(const Napi::CallbackInfo &info);
+    Napi::Value NoAutoCapture(const Napi::CallbackInfo &info);
     Napi::Value PCRE2Mode(const Napi::CallbackInfo &info);
 
     static Napi::Value Species(const Napi::CallbackInfo &info);

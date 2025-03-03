@@ -30,6 +30,9 @@ Napi::Object PCRE2::Init(Napi::Env env, Napi::Object exports) {
         InstanceAccessor<&PCRE2::Sticky>("sticky"),
         InstanceAccessor<&PCRE2::Unicode>("unicode"),
         InstanceAccessor<&PCRE2::UnicodeSets>("unicodeSets"),
+        InstanceAccessor<&PCRE2::Extended>("extended"),
+        InstanceAccessor<&PCRE2::ExtendedMore>("extendedMore"),
+        InstanceAccessor<&PCRE2::NoAutoCapture>("noAutoCapture"),
         InstanceAccessor<&PCRE2::PCRE2Mode>("pcre2"),
         StaticAccessor<&PCRE2::Species>(instanceData->Symbol.Get("species").As<Napi::Symbol>()),
     });
@@ -616,7 +619,6 @@ void PCRE2::SetLastIndex(const Napi::CallbackInfo &info, const Napi::Value &valu
 }
 
 void PCRE2::ParseFlags(Napi::Env env, const std::string &flags) {
-    // TODO We can support a bunch of other flags that are supoorted by PCRE2
     for (char flag : flags) {
         switch (flag) {
             case 'd':
@@ -643,16 +645,15 @@ void PCRE2::ParseFlags(Napi::Env env, const std::string &flags) {
             case 'y':
                 m_sticky = true;
                 break;
-            // TODO PCRE2 extra flags
-            // case 'x':
-            //     if (m_options | PCRE2_EXTENDED) {
-            //         m_options |= PCRE2_EXTENDED_MORE;
-            //     }
-            //     m_options |= PCRE2_EXTENDED;
-            //     break;
-            // case 'n':
-            //    m_options |= PCRE2_NO_AUTO_CAPTURE;
-            //    break;
+            case 'x':
+                if (m_options | PCRE2_EXTENDED) {
+                    m_options |= PCRE2_EXTENDED_MORE;
+                }
+                m_options |= PCRE2_EXTENDED;
+                break;
+            case 'n':
+               m_options |= PCRE2_NO_AUTO_CAPTURE;
+               break;
             // TODO Add aD, aS, aW, aP, aT, a, r, J, U
             case 'p':
                 m_pcre2 = true;
@@ -777,6 +778,18 @@ Napi::Value PCRE2::Unicode(const Napi::CallbackInfo &info) {
 
 Napi::Value PCRE2::UnicodeSets(const Napi::CallbackInfo &info) {
     return Napi::Boolean::New(info.Env(), m_options & PCRE2_ALT_EXTENDED_CLASS);
+}
+
+Napi::Value PCRE2::Extended(const Napi::CallbackInfo &info) {
+    return Napi::Boolean::New(info.Env(), m_options & PCRE2_EXTENDED);
+}
+
+Napi::Value PCRE2::ExtendedMore(const Napi::CallbackInfo &info) {
+    return Napi::Boolean::New(info.Env(), m_options & PCRE2_EXTENDED_MORE);
+}
+
+Napi::Value PCRE2::NoAutoCapture(const Napi::CallbackInfo &info) {
+    return Napi::Boolean::New(info.Env(), m_options & PCRE2_NO_AUTO_CAPTURE);
 }
 
 Napi::Value PCRE2::PCRE2Mode(const Napi::CallbackInfo &info) {

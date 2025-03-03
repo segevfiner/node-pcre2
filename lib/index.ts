@@ -24,6 +24,13 @@ declare namespace Addon {
     [Symbol.split](string: string, limit?: number): string[];
     [Symbol.matchAll](str: string): RegExpStringIterator<RegExpMatchArray>;
     [Symbol.replace](str: string, replacement: string): string;
+
+    // PCRE2 extras
+    extended: boolean;
+    extendedMore: boolean;
+    noAutoCapture: boolean;
+    pcre2: boolean;
+
   }
 
   const PCRE2_MAJOR: number;
