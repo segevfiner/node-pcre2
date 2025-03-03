@@ -495,8 +495,112 @@ Napi::Value PCRE2::MatchAll(const Napi::CallbackInfo &info) {
 }
 
 Napi::Value PCRE2::Replace(const Napi::CallbackInfo &info) {
-    // TODO This one can be troublesome as pcre2_substitute doesn't handle dynamic replacement by the callout
-    return Napi::Value();
+    InstanceData *instanceData = info.Env().GetInstanceData<InstanceData>();
+
+    if (info.Length() < 2) {
+        throw Napi::TypeError::New(info.Env(), "Wrong number of arguments");
+    }
+
+    Napi::String subject = info[0].ToString();
+    std::u16string subjectStr = subject.Utf16Value();
+
+    if (m_global) {
+        m_lastIndex = 0;
+    }
+
+    if (!info[1].IsFunction()) {
+        Napi::String replacement = info[1].ToString();
+        std::u16string replacementStr = replacement.Utf16Value();
+        std::vector<PCRE2_UCHAR> outputBuffer(subjectStr.size() + (subjectStr.size() / 2));
+
+        while (true) {
+            PCRE2_SIZE outputBufferSize = outputBuffer.size();
+            int rc = pcre2_substitute(
+                m_re,
+                reinterpret_cast<PCRE2_SPTR16>(subjectStr.c_str()),
+                subjectStr.length(),
+                0,
+                PCRE2_SUBSTITUTE_OVERFLOW_LENGTH | (m_global ? PCRE2_SUBSTITUTE_GLOBAL : 0),
+                m_matchData,
+                nullptr,
+                reinterpret_cast<PCRE2_SPTR16>(replacementStr.c_str()),
+                replacementStr.length(),
+                outputBuffer.data(),
+                &outputBufferSize
+            );
+            if (rc < 0) {
+                if (rc == PCRE2_ERROR_NOMEMORY) {
+                    outputBuffer.resize(outputBufferSize);
+                    continue;
+                }
+
+                PCRE2_UCHAR errorBuffer[256];
+                pcre2_get_error_message(rc, errorBuffer, sizeof(errorBuffer));
+                Napi::String error = Napi::String::New(info.Env(), reinterpret_cast<const char16_t*>(errorBuffer));
+                std::ostringstream oss;
+                oss << "PCRE2 substituion error " << rc << ": " << error.Utf8Value();
+                throw Napi::Error::New(info.Env(), oss.str());
+            }
+
+            return Napi::String::New(info.Env(), reinterpret_cast<const char16_t*>(outputBuffer.data()), outputBufferSize);
+        }
+    } else {
+        Napi::Function replacer = info[1].As<Napi::Function>();
+        std::u16string result;
+
+        uint32_t options = 0;
+        size_t nextSubjectPosition = 0;
+        while (true) {
+            Napi::HandleScope scope(info.Env());
+
+            Napi::Array match = ExecImpl(info.Env(), subject).As<Napi::Array>();
+            if (match.IsNull()) {
+                if (options == 0) {
+                    break;
+                }
+
+                m_lastIndex = AdvanceStringIndex(subjectStr, m_lastIndex);
+                continue;
+            }
+
+            Napi::String matched = match.Get(0u).ToString();
+            std::vector<napi_value> replacerArgs = { matched };
+            for (size_t i = 1; i < match.Length(); i++) {
+                replacerArgs.push_back(match.Get(i).ToString());
+            }
+            replacerArgs.push_back(match.Get("index"));
+            replacerArgs.push_back(subject);
+            Napi::Value groups = match.Get("groups");
+            if (!groups.IsUndefined()) {
+                replacerArgs.push_back(groups);
+            }
+            Napi::String replacement = replacer.Call(replacerArgs).ToString();
+
+            Napi::Number index = match.Get("index").As<Napi::Number>();
+            result.append(subjectStr, nextSubjectPosition, index.Int64Value() - nextSubjectPosition);
+            result.append(replacement.Utf16Value());
+            nextSubjectPosition = index.Int64Value() + matched.Utf16Value().length();
+
+            options = 0;
+            if (match.Get(0u).As<Napi::String>().Utf16Value().empty()) {
+                if (m_lastIndex == subjectStr.length()) {
+                    break;
+                }
+
+                if (m_pcre2) {
+                    options = PCRE2_NOTEMPTY_ATSTART | PCRE2_ANCHORED;
+                } else {
+                    m_lastIndex = AdvanceStringIndex(subjectStr, m_lastIndex);
+                }
+            }
+        }
+
+        if (nextSubjectPosition < subjectStr.length()) {
+            result.append(subjectStr, nextSubjectPosition, subjectStr.length() - nextSubjectPosition);
+        }
+
+        return Napi::String::New(info.Env(), result);
+    }
 }
 
 Napi::Value PCRE2::GetLastIndex(const Napi::CallbackInfo &info) {
