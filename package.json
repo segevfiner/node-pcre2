@@ -17,7 +17,7 @@
     "compile": "cmake-js compile",
     "build": "tsc -b && cmake-js build",
     "prebuild": "prebuild --backend cmake-js -r napi -t 8",
-    "type-check": "tsc -b --noEmit",
+    "type-check": "tsc -b -f --noEmit",
     "lint": "eslint",
     "test": "vitest"
   },
