@@ -1,7 +1,8 @@
 {
     "extends": "@tsconfig/node20/tsconfig.json",
     "include": [
-        "eslint.config.mjs"
+        "eslint.config.mjs",
+        "vitest.config.mts"
     ],
     "compilerOptions": {
         "noEmit": true,
