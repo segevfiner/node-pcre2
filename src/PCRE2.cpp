@@ -660,7 +660,7 @@ void PCRE2::ParseFlags(Napi::Env env, const std::string &flags) {
                 break;
             // TODO Add flag to disable JIT or force immediate JIT?
             default:
-                throw Napi::Error::New(env, "Unsupported flag: " + std::string{flag});
+                throw Napi::Error::New(env, "Invalid flags supplied to PCRE2 constructor '" + flags + "'");
         }
     }
 }

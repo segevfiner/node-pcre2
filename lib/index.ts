@@ -4,20 +4,22 @@ declare namespace Addon {
   class PCRE2 {
     constructor(pattern: string, flags?: string);
 
+    static readonly [Symbol.species]: PCRE2;
+
     exec(string: string): RegExpExecArray | null;
     test(string: string): boolean;
 
-    lastIndex: number;
-    source: string;
-    flags: string;
-    global: boolean;
-    ignoreCase: boolean;
-    multiline: boolean;
-    sticky: boolean;
-    unicode: boolean;
-    dotAll: boolean;
-    hasIndices: boolean;
-    unicodeSets: boolean;
+    readonly lastIndex: number;
+    readonly source: string;
+    readonly flags: string;
+    readonly global: boolean;
+    readonly ignoreCase: boolean;
+    readonly multiline: boolean;
+    readonly sticky: boolean;
+    readonly unicode: boolean;
+    readonly dotAll: boolean;
+    readonly hasIndices: boolean;
+    readonly unicodeSets: boolean;
 
     [Symbol.match](string: string): RegExpMatchArray | null;
     [Symbol.search](string: string): number;
@@ -26,11 +28,10 @@ declare namespace Addon {
     [Symbol.replace](str: string, replacement: string): string;
 
     // PCRE2 extras
-    extended: boolean;
-    extendedMore: boolean;
-    noAutoCapture: boolean;
-    pcre2: boolean;
-
+    readonly extended: boolean;
+    readonly extendedMore: boolean;
+    readonly noAutoCapture: boolean;
+    readonly pcre2: boolean;
   }
 
   const PCRE2_MAJOR: number;
