@@ -62,9 +62,7 @@ PCRE2::PCRE2(const Napi::CallbackInfo &info)
         throw Napi::TypeError::New(info.Env(), "Wrong number of arguments");
     }
 
-    if (info[0].IsString()) {
-        m_pattern = info[0].As<Napi::String>().Utf16Value();
-    } else if (info[0].IsObject() && info[0].As<Napi::Object>().InstanceOf(instanceData->RegExp.Value())) {
+    if (info[0].IsObject() && info[0].As<Napi::Object>().InstanceOf(instanceData->RegExp.Value())) {
         Napi::Object re = info[0].As<Napi::Object>();
         Napi::Value source = re.Get("source");
         if (!source.IsString()) {
@@ -82,21 +80,18 @@ PCRE2::PCRE2(const Napi::CallbackInfo &info)
         m_pattern = pcre2->m_pattern;
         m_flags = pcre2->m_flags;
     } else {
-        throw Napi::TypeError::New(info.Env(), "Expected a string");
+        m_pattern = info[0].ToString().Utf16Value();
     }
 
     if (info.Length() > 1) {
-        if (!info[1].IsString()) {
-            throw Napi::TypeError::New(info.Env(), "Expected a string");
-        }
-        m_flags = info[1].As<Napi::String>().Utf8Value();
+        m_flags = info[1].ToString().Utf8Value();
+    }
+
+    if (!m_pcre2) {
+        m_options |= PCRE2_ALT_BSUX | PCRE2_DOLLAR_ENDONLY | PCRE2_MATCH_UNSET_BACKREF;
     }
 
     ParseFlags(info.Env(), m_flags);
-
-    if (!m_pcre2) {
-        m_options = PCRE2_ALT_BSUX | PCRE2_DOLLAR_ENDONLY | PCRE2_MATCH_UNSET_BACKREF;
-    }
 
     int errornumber;
     size_t erroroffset;
