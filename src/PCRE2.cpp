@@ -189,7 +189,6 @@ Napi::Value PCRE2::ExecImpl(Napi::Env env, const Napi::String &subject, uint32_t
     Napi::Array indices;
     if (m_hasIndices) {
         indices = Napi::Array::New(env, rc);
-        result["indices"] = indices;
     }
 
     for (PCRE2_SIZE i = 0; i < rc; i++) {
@@ -265,6 +264,10 @@ Napi::Value PCRE2::ExecImpl(Napi::Env env, const Napi::String &subject, uint32_t
         result["groups"] = groups;
     } else {
         result["groups"] = env.Undefined();
+    }
+
+    if (m_hasIndices) {
+        result["indices"] = indices;
     }
 
     return scope.Escape(result);
