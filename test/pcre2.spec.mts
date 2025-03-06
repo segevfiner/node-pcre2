@@ -72,7 +72,7 @@ function createIndicesGroupsArray(
   return obj;
 }
 
-describe("PCRE2 constructor", () => {
+describe.concurrent("PCRE2 constructor", () => {
   test("single argument", () => {
     const re = new PCRE2("abc");
     expect(re.source).toBe("abc");
@@ -110,7 +110,7 @@ describe("PCRE2 constructor", () => {
   });
 });
 
-describe("pcre2 tagged template literal", () => {
+describe.concurrent("pcre2 tagged template literal", () => {
   test("no flags", () => {
     const re = pcre2`abc`;
     expect(re.source).toBe("abc");
@@ -148,7 +148,7 @@ describe("pcre2 tagged template literal", () => {
   });
 });
 
-describe("exec", () => {
+describe.concurrent("exec", () => {
   test("single match", () => {
     const re = pcre2`abc`;
     const input = "abc";
