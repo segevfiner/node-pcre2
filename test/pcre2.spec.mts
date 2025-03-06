@@ -9,6 +9,9 @@ function createMatchArray(
     groups?: {
       [key: string]: string;
     };
+    groupsIndices?: {
+      [key: string]: [number, number];
+    };
     indices?: number[][];
   }
 ): RegExpExecArray {
@@ -18,6 +21,7 @@ function createMatchArray(
   arr.groups = createGroupsArray(fields.groups);
   if (fields.indices != null) {
     arr.indices = createIndicesArray(fields.indices);
+    arr.indices.groups = createIndicesGroupsArray(fields.groupsIndices);
   }
   return arr;
 }
@@ -48,6 +52,24 @@ function createIndicesArray(
   const arr = [...indices] as RegExpIndicesArray;
   arr.groups = fields?.groups;
   return arr;
+}
+
+function createIndicesGroupsArray(
+  indicesGroups?: {
+    [key: string]: [number, number];
+  }
+) {
+  if (indicesGroups == null) {
+    return undefined;
+  }
+
+  const obj = Object.create(null) as {
+    [key: string]: [number, number];
+  };
+  for (const [key, value] of Object.entries(indicesGroups)) {
+    obj[key] = value;
+  }
+  return obj;
 }
 
 describe("PCRE2 constructor", () => {
@@ -198,6 +220,34 @@ describe("exec", () => {
         index: 0,
         input,
         groups: { one: "bar", value: "123" },
+      })
+    );
+  });
+
+  test("single match with named captures", () => {
+    const re = pcre2`^foo(?<one>bar)qux: (?<value>\d+)$`;
+    const input = "foobarqux: 123";
+    const result = re.exec(input);
+    expect(result).toStrictEqual(
+      createMatchArray(["foobarqux: 123", "bar", "123"], {
+        index: 0,
+        input,
+        groups: { one: "bar", value: "123" },
+      })
+    );
+  });
+
+  test("single match with named captures and indices", () => {
+    const re = pcre2("d")`^foo(?<one>bar)qux: (?<value>\d+)$`;
+    const input = "foobarqux: 123";
+    const result = re.exec(input);
+    expect(result).toStrictEqual(
+      createMatchArray(["foobarqux: 123", "bar", "123"], {
+        index: 0,
+        input,
+        groups: { one: "bar", value: "123" },
+        indices: [[0, 14], [3, 6], [11, 14]],
+        groupsIndices: { one: [3, 6], value: [11, 14] },
       })
     );
   });
