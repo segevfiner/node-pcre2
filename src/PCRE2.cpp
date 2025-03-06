@@ -241,7 +241,7 @@ Napi::Value PCRE2::ExecImpl(Napi::Env env, const Napi::String &subject, uint32_t
 
         PCRE2_SPTR tabptr = nameTable;
         for (uint32_t i = 0; i < nameCount; i++) {
-            Napi::String groupName = Napi::String::New(env, reinterpret_cast<const char16_t*>(tabptr + 1), nameEntrySize - 2);
+            Napi::String groupName = Napi::String::New(env, reinterpret_cast<const char16_t*>(tabptr + 1));
 
             int n = tabptr[0];
             groups.Set(
@@ -264,6 +264,9 @@ Napi::Value PCRE2::ExecImpl(Napi::Env env, const Napi::String &subject, uint32_t
         result["groups"] = groups;
     } else {
         result["groups"] = env.Undefined();
+        if (m_hasIndices) {
+            indices["groups"] = env.Undefined();
+        }
     }
 
     if (m_hasIndices) {

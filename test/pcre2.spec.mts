@@ -9,16 +9,44 @@ function createMatchArray(
     groups?: {
       [key: string]: string;
     };
-    indices?: RegExpIndicesArray;
+    indices?: number[][];
   }
 ): RegExpExecArray {
   const arr: RegExpExecArray = [...matches] as RegExpExecArray;
   arr.index = fields.index;
   arr.input = fields.input;
-  arr.groups = fields.groups;
+  arr.groups = createGroupsArray(fields.groups);
   if (fields.indices != null) {
-    arr.indices = fields.indices;
+    arr.indices = createIndicesArray(fields.indices);
   }
+  return arr;
+}
+
+function createGroupsArray(groups?: { [key: string]: string }): {
+  [key: string]: string;
+} | undefined {
+  if (groups == null) {
+    return groups;
+  }
+  const obj = Object.create(null) as {
+    [key: string]: string;
+  };
+  for (const [key, value] of Object.entries(groups)) {
+    obj[key] = value;
+  }
+  return obj;
+}
+
+function createIndicesArray(
+  indices: number[][],
+  fields?: {
+    groups?: {
+      [key: string]: [number, number];
+    };
+  }
+): RegExpIndicesArray {
+  const arr = [...indices] as RegExpIndicesArray;
+  arr.groups = fields?.groups;
   return arr;
 }
 
@@ -101,8 +129,11 @@ describe("pcre2 tagged template literal", () => {
 describe("exec", () => {
   test("single match", () => {
     const re = pcre2`abc`;
-    const result = re.exec("abc");
-    expect(result).toStrictEqual(createMatchArray(["abc"], { index: 0, input: "abc" }));
+    const input = "abc";
+    const result = re.exec(input);
+    expect(result).toStrictEqual(
+      createMatchArray(["abc"], { index: 0, input })
+    );
   });
 
   test("multiple match", () => {
@@ -122,12 +153,52 @@ describe("exec", () => {
     const re = pcre2("gd")`a`;
     const input = "abaac";
     let result = re.exec(input);
-    expect(result).toStrictEqual(createMatchArray(["a"], { index: 0, input, indices: [[0, 1]] }));
+    expect(result).toStrictEqual(
+      createMatchArray(["a"], {
+        index: 0,
+        input,
+        indices: [[0, 1]],
+      })
+    );
     result = re.exec(input);
-    expect(result).toStrictEqual(createMatchArray(["a"], { index: 2, input, indices: [[2, 3]] }));
+    expect(result).toStrictEqual(
+      createMatchArray(["a"], {
+        index: 2,
+        input,
+        indices: [[2, 3]],
+      })
+    );
     result = re.exec(input);
-    expect(result).toStrictEqual(createMatchArray(["a"], { index: 3, input, indices: [[3, 4]] }));
+    expect(result).toStrictEqual(
+      createMatchArray(["a"], {
+        index: 3,
+        input,
+        indices: [[3, 4]],
+      })
+    );
     result = re.exec(input);
     expect(result).toBeNull();
+  });
+
+  test("single match with captures", () => {
+    const re = pcre2`^foo(bar)qux: (\d+)$`;
+    const input = "foobarqux: 123";
+    const result = re.exec(input);
+    expect(result).toStrictEqual(
+      createMatchArray(["foobarqux: 123", "bar", "123"], { index: 0, input })
+    );
+  });
+
+  test("single match with named captures", () => {
+    const re = pcre2`^foo(?<one>bar)qux: (?<value>\d+)$`;
+    const input = "foobarqux: 123";
+    const result = re.exec(input);
+    expect(result).toStrictEqual(
+      createMatchArray(["foobarqux: 123", "bar", "123"], {
+        index: 0,
+        input,
+        groups: { one: "bar", value: "123" },
+      })
+    );
   });
 });
