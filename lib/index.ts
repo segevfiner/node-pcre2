@@ -31,6 +31,14 @@ declare namespace Addon {
     readonly extended: boolean;
     readonly extendedMore: boolean;
     readonly noAutoCapture: boolean;
+    readonly asciiBsd: boolean;
+    readonly asciiBss: boolean;
+    readonly asciiBsw: boolean;
+    readonly asciiDigit: boolean;
+    readonly asciiPosix: boolean;
+    readonly caselessRestrict: boolean;
+    readonly dupnames: boolean;
+    readonly ungreedy: boolean;
     readonly pcre2: boolean;
   }
 

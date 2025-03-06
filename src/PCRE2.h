@@ -44,6 +44,14 @@ private:
     Napi::Value Extended(const Napi::CallbackInfo &info);
     Napi::Value ExtendedMore(const Napi::CallbackInfo &info);
     Napi::Value NoAutoCapture(const Napi::CallbackInfo &info);
+    Napi::Value AsciiBsd(const Napi::CallbackInfo &info);
+    Napi::Value AsciiBss(const Napi::CallbackInfo &info);
+    Napi::Value AsciiBsw(const Napi::CallbackInfo &info);
+    Napi::Value AsciiDigit(const Napi::CallbackInfo &info);
+    Napi::Value AsciiPosix(const Napi::CallbackInfo &info);
+    Napi::Value CaselessRestrict(const Napi::CallbackInfo &info);
+    Napi::Value Dupnames(const Napi::CallbackInfo &info);
+    Napi::Value Ungreedy(const Napi::CallbackInfo &info);
     Napi::Value PCRE2Mode(const Napi::CallbackInfo &info);
 
     static Napi::Value Species(const Napi::CallbackInfo &info);
@@ -51,12 +59,14 @@ private:
 
     void ParseFlags(Napi::Env env, const std::string &flags);
     size_t PatternSize(Napi::Env env) const;
+    void AdjustMatchDataHeapFramesSize(Napi::Env env);
 
     void TierUpTick(Napi::Env env);
 
     std::u16string m_pattern;
     std::string m_flags;
     uint32_t m_options;
+    uint32_t m_extraOptions;
     bool m_global;
     bool m_sticky;
     bool m_hasIndices;
@@ -68,6 +78,7 @@ private:
     bool m_utf8;
     bool m_crlfIsNewline;
     size_t m_size;
+    size_t m_matchDataHeapframesSize;
 };
 
 #endif // NODE_PCRE2_PCRE2_H_

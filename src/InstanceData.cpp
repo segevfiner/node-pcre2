@@ -3,8 +3,6 @@
 InstanceData::InstanceData(Napi::Env env) {
     compileContext = pcre2_compile_context_create(nullptr);
     pcre2_set_newline(compileContext, PCRE2_NEWLINE_ANYCRLF);
-    // Flags to try and behave more closely to JS RegExp, though we might want to make this configurable
-    pcre2_set_compile_extra_options(compileContext, PCRE2_EXTRA_ALT_BSUX);
 
     Symbol = Napi::Persistent(env.Global().Get("Symbol").As<Napi::Object>());
     RegExp = Napi::Persistent(env.Global().Get("RegExp").As<Napi::Function>());

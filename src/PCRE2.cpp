@@ -33,6 +33,14 @@ Napi::Object PCRE2::Init(Napi::Env env, Napi::Object exports) {
         InstanceAccessor<&PCRE2::Extended>("extended"),
         InstanceAccessor<&PCRE2::ExtendedMore>("extendedMore"),
         InstanceAccessor<&PCRE2::NoAutoCapture>("noAutoCapture"),
+        InstanceAccessor<&PCRE2::AsciiBsd>("asciiBsd"),
+        InstanceAccessor<&PCRE2::AsciiBss>("asciiBss"),
+        InstanceAccessor<&PCRE2::AsciiBsw>("asciiBsw"),
+        InstanceAccessor<&PCRE2::AsciiDigit>("asciiDigit"),
+        InstanceAccessor<&PCRE2::AsciiPosix>("asciiPosix"),
+        InstanceAccessor<&PCRE2::CaselessRestrict>("caselessRestrict"),
+        InstanceAccessor<&PCRE2::Dupnames>("dupnames"),
+        InstanceAccessor<&PCRE2::Ungreedy>("ungreedy"),
         InstanceAccessor<&PCRE2::PCRE2Mode>("pcre2"),
         StaticAccessor<&PCRE2::Species>(instanceData->Symbol.Get("species").As<Napi::Symbol>()),
     });
@@ -45,14 +53,15 @@ Napi::Object PCRE2::Init(Napi::Env env, Napi::Object exports) {
 
 PCRE2::PCRE2(const Napi::CallbackInfo &info)
     : Napi::ObjectWrap<PCRE2>(info)
-    // Flags to try and behave more closely to JS RegExp, though we might want to make this configurable
     , m_options(0)
+    , m_extraOptions(0)
     , m_global(false)
     , m_sticky(false)
     , m_hasIndices(false)
     , m_pcre2(false)
     , m_lastIndex(0)
     , m_tierUpTicks(1)
+    , m_matchDataHeapframesSize(0)
 {
     InstanceData *instanceData = info.Env().GetInstanceData<InstanceData>();
 
@@ -87,11 +96,16 @@ PCRE2::PCRE2(const Napi::CallbackInfo &info)
         m_flags = info[1].ToString().Utf8Value();
     }
 
+    ParseFlags(info.Env(), m_flags);
+
     if (!m_pcre2) {
+        // Flags to try and behave more closely to JS RegExp
         m_options |= PCRE2_ALT_BSUX | PCRE2_DOLLAR_ENDONLY | PCRE2_MATCH_UNSET_BACKREF;
+        m_extraOptions |= PCRE2_EXTRA_ALT_BSUX;
     }
 
-    ParseFlags(info.Env(), m_flags);
+    pcre2_compile_context *compileContext = pcre2_compile_context_copy(instanceData->compileContext);
+    pcre2_set_compile_extra_options(compileContext, m_extraOptions);
 
     int errornumber;
     size_t erroroffset;
@@ -101,8 +115,11 @@ PCRE2::PCRE2(const Napi::CallbackInfo &info)
         m_options,
         &errornumber,
         &erroroffset,
-        instanceData->compileContext
+        compileContext
     );
+
+    pcre2_compile_context_free(compileContext);
+
     if (m_re == nullptr) {
         PCRE2_UCHAR errorBuffer[256];
         pcre2_get_error_message(errornumber, errorBuffer, sizeof(errorBuffer));
@@ -159,7 +176,7 @@ Napi::Value PCRE2::ExecImpl(Napi::Env env, const Napi::String &subject, uint32_t
         m_matchData,
         nullptr
     );
-    // TODO Might want to report pcre2_get_match_data_heapframes_size to AdjustExternalMemory
+    AdjustMatchDataHeapFramesSize(env);
     if (rc < 0) {
         if (rc == PCRE2_ERROR_NOMATCH) {
             if (m_global || m_sticky) {
@@ -292,6 +309,10 @@ Napi::Value PCRE2::Test(const Napi::CallbackInfo &info) {
     Napi::String subject = info[0].ToString();
     std::u16string subjectStr = info[0].As<Napi::String>().Utf16Value();
 
+    if (!m_global && !m_sticky) {
+        m_lastIndex = 0;
+    }
+
     TierUpTick(info.Env());
     int rc = pcre2_match(
         m_re,
@@ -303,7 +324,7 @@ Napi::Value PCRE2::Test(const Napi::CallbackInfo &info) {
         m_matchData,
         nullptr
     );
-    // TODO Might want to report pcre2_get_match_data_heapframes_size to AdjustExternalMemory
+    AdjustMatchDataHeapFramesSize(info.Env());
     if (rc < 0) {
         if (rc == PCRE2_ERROR_NOMATCH) {
             m_lastIndex = 0;
@@ -620,8 +641,8 @@ void PCRE2::SetLastIndex(const Napi::CallbackInfo &info, const Napi::Value &valu
 }
 
 void PCRE2::ParseFlags(Napi::Env env, const std::string &flags) {
-    for (char flag : flags) {
-        switch (flag) {
+    for (std::string::const_iterator i = flags.cbegin(); i != flags.cend(); i++) {
+        switch (*i) {
             case 'd':
                 m_hasIndices = true;
                 break;
@@ -655,7 +676,47 @@ void PCRE2::ParseFlags(Napi::Env env, const std::string &flags) {
             case 'n':
                m_options |= PCRE2_NO_AUTO_CAPTURE;
                break;
-            // TODO Add aD, aS, aW, aP, aT, a, r, J, U
+            case 'a':
+                if (i + 1 != flags.end()) {
+                    switch (*(i + 1)) {
+                    case 'D':
+                        m_extraOptions |= PCRE2_EXTRA_ASCII_BSD;
+                        break;
+                    case 'P':
+                        m_extraOptions |= PCRE2_EXTRA_ASCII_POSIX|PCRE2_EXTRA_ASCII_DIGIT;
+                        break;
+                    case 'S':
+                        m_extraOptions |= PCRE2_EXTRA_ASCII_BSS;
+                        break;
+                    case 'T':
+                        m_extraOptions |= PCRE2_EXTRA_ASCII_DIGIT;
+                        break;
+                    case 'W':
+                        m_extraOptions |= PCRE2_EXTRA_ASCII_BSW;
+                        break;
+                    default:
+                        m_extraOptions |=
+                            PCRE2_EXTRA_ASCII_BSD|PCRE2_EXTRA_ASCII_BSS|
+                            PCRE2_EXTRA_ASCII_BSW|
+                            PCRE2_EXTRA_ASCII_DIGIT|PCRE2_EXTRA_ASCII_POSIX;
+                        break;
+                    }
+                } else {
+                    m_extraOptions |=
+                        PCRE2_EXTRA_ASCII_BSD|PCRE2_EXTRA_ASCII_BSS|
+                        PCRE2_EXTRA_ASCII_BSW|
+                        PCRE2_EXTRA_ASCII_DIGIT|PCRE2_EXTRA_ASCII_POSIX;
+                }
+                break;
+            case 'r':
+                m_extraOptions |= PCRE2_EXTRA_CASELESS_RESTRICT;
+                break;
+            case 'J':
+                m_options |= PCRE2_DUPNAMES;
+                break;
+            case 'U':
+                m_options |= PCRE2_UNGREEDY;
+                break;
             case 'p':
                 m_pcre2 = true;
                 break;
@@ -719,6 +780,15 @@ size_t PCRE2::PatternSize(Napi::Env env) const {
     }
 
     return size;
+}
+
+void PCRE2::AdjustMatchDataHeapFramesSize(Napi::Env env)
+{
+    size_t newSize = pcre2_get_match_data_heapframes_size(m_matchData);
+    if (newSize != m_matchDataHeapframesSize) {
+        Napi::MemoryManagement::AdjustExternalMemory(env, newSize - m_matchDataHeapframesSize);
+        m_matchDataHeapframesSize = newSize;
+    }
 }
 
 void PCRE2::TierUpTick(Napi::Env env) {
@@ -791,6 +861,38 @@ Napi::Value PCRE2::ExtendedMore(const Napi::CallbackInfo &info) {
 
 Napi::Value PCRE2::NoAutoCapture(const Napi::CallbackInfo &info) {
     return Napi::Boolean::New(info.Env(), m_options & PCRE2_NO_AUTO_CAPTURE);
+}
+
+Napi::Value PCRE2::AsciiBsd(const Napi::CallbackInfo &info) {
+    return Napi::Boolean::New(info.Env(), m_extraOptions | PCRE2_EXTRA_ASCII_BSD);
+}
+
+Napi::Value PCRE2::AsciiBss(const Napi::CallbackInfo &info) {
+    return Napi::Boolean::New(info.Env(), m_extraOptions | PCRE2_EXTRA_ASCII_BSS);
+}
+
+Napi::Value PCRE2::AsciiBsw(const Napi::CallbackInfo &info) {
+    return Napi::Boolean::New(info.Env(), m_extraOptions | PCRE2_EXTRA_ASCII_BSW);
+}
+
+Napi::Value PCRE2::AsciiDigit(const Napi::CallbackInfo &info) {
+    return Napi::Boolean::New(info.Env(), m_extraOptions | PCRE2_EXTRA_ASCII_DIGIT);
+}
+
+Napi::Value PCRE2::AsciiPosix(const Napi::CallbackInfo &info) {
+    return Napi::Boolean::New(info.Env(), m_extraOptions | PCRE2_EXTRA_ASCII_POSIX);
+}
+
+Napi::Value PCRE2::CaselessRestrict(const Napi::CallbackInfo &info) {
+    return Napi::Boolean::New(info.Env(), m_extraOptions | PCRE2_EXTRA_CASELESS_RESTRICT);
+}
+
+Napi::Value PCRE2::Dupnames(const Napi::CallbackInfo &info) {
+    return Napi::Boolean::New(info.Env(), m_options & PCRE2_DUPNAMES);
+}
+
+Napi::Value PCRE2::Ungreedy(const Napi::CallbackInfo &info) {
+    return Napi::Boolean::New(info.Env(), m_options & PCRE2_UNGREEDY);
 }
 
 Napi::Value PCRE2::PCRE2Mode(const Napi::CallbackInfo &info) {

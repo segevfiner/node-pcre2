@@ -158,6 +158,26 @@ describe.concurrent("exec", () => {
     );
   });
 
+  test("exec multiple times", () => {
+    const re = pcre2`abc`;
+
+    let input = "abc";
+    let result = re.exec(input);
+    expect(result).toStrictEqual(
+      createMatchArray(["abc"], { index: 0, input })
+    );
+
+    input = "foo";
+    result = re.exec(input);
+    expect(result).toBeNull();
+
+    input = "fooabcbar";
+    result = re.exec(input);
+    expect(result).toStrictEqual(
+      createMatchArray(["abc"], { index: 3, input })
+    );
+  });
+
   test("multiple match", () => {
     const re = pcre2("g")`a`;
     const input = "abaac";
