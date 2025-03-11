@@ -6,6 +6,9 @@ on:
   pull_request:
   workflow_call:
 
+env:
+  CMAKE_BUILD_PARALLEL_LEVEL: 2
+
 jobs:
   prebuild:
     name: Prebuild

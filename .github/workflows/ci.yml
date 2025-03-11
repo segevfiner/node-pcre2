@@ -5,6 +5,9 @@ on:
     branches: [ "main" ]
   pull_request:
 
+env:
+  CMAKE_BUILD_PARALLEL_LEVEL: 2
+
 jobs:
   build:
     name: Build
@@ -14,9 +17,6 @@ jobs:
       matrix:
         # See supported Node.js release schedule at https://nodejs.org/en/about/releases/
         node-version: [18.x, 20.x, 22.x]
-
-    env:
-      CMAKE_BUILD_PARALLEL_LEVEL: 2
 
     steps:
     - uses: actions/checkout@v4
