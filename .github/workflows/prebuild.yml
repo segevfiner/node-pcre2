@@ -1,0 +1,42 @@
+name: Prebuild
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+
+jobs:
+  prebuild:
+    name: Prebuild
+    runs-on: ${{ matrix.runs-on }}
+    strategy:
+      matrix:
+        runs-on: [ubuntu-22.04, windows-2022, macos-13]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: 'pnpm'
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Prebuild
+        run: pnpm prebuild
+
+      - name: Prebuild (arm64)
+        if: startsWith(matrix.runs-on, 'macos')
+        run: pnpm prebuild -- --arch arm64
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: prebuilds-${{ matrix.runs-on }}
+          path: prebuilds

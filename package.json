@@ -18,7 +18,7 @@
     "compile-debug": "tsc -b && pnpm cmake-js clean && cmake-js compile -D --CDCMAKE_EXPORT_COMPILE_COMMANDS=ON",
     "build": "tsc -b && cmake-js build",
     "clean": "cmake-js clean",
-    "prebuild": "prebuild --backend cmake-js -r napi -t 8",
+    "prebuild": "prebuild --backend cmake-js -r napi -t 8 --strip",
     "type-check": "tsc -b -f --noEmit",
     "lint": "eslint",
     "test": "vitest"
