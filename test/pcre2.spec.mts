@@ -272,3 +272,27 @@ describe.concurrent("exec", () => {
     );
   });
 });
+
+describe("test", () => {
+  test("test single match", () => {
+    const re = pcre2`abc`;
+    expect(re.test("abc")).toBe(true)
+    expect(re.test("foo")).toBe(false);
+  });
+
+  test("test multiple match no global", () => {
+    const re = pcre2`abc`;
+    const input = "abcfooabc"
+    expect(re.test(input)).toBe(true)
+    expect(re.test(input)).toBe(true);
+    expect(re.test(input)).toBe(true);
+  });
+
+  test("test multiple match global", () => {
+    const re = pcre2("g")`abc`;
+    const input = "abcfooabc"
+    expect(re.test(input)).toBe(true)
+    expect(re.test(input)).toBe(true);
+    expect(re.test(input)).toBe(false);
+  });
+});
