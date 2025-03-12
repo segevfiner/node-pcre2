@@ -26,9 +26,11 @@ function createMatchArray(
   return arr;
 }
 
-function createGroupsArray(groups?: { [key: string]: string }): {
-  [key: string]: string;
-} | undefined {
+function createGroupsArray(groups?: { [key: string]: string }):
+  | {
+      [key: string]: string;
+    }
+  | undefined {
   if (groups == null) {
     return groups;
   }
@@ -54,11 +56,9 @@ function createIndicesArray(
   return arr;
 }
 
-function createIndicesGroupsArray(
-  indicesGroups?: {
-    [key: string]: [number, number];
-  }
-) {
+function createIndicesGroupsArray(indicesGroups?: {
+  [key: string]: [number, number];
+}) {
   if (indicesGroups == null) {
     return undefined;
   }
@@ -88,6 +88,14 @@ describe.concurrent("PCRE2 constructor", () => {
     expect(re.extended).toBe(false);
     expect(re.extendedMore).toBe(false);
     expect(re.noAutoCapture).toBe(false);
+    expect(re.asciiBsd).toBe(false);
+    expect(re.asciiBss).toBe(false);
+    expect(re.asciiBsw).toBe(false);
+    expect(re.asciiDigit).toBe(false);
+    expect(re.asciiPosix).toBe(false);
+    expect(re.caselessRestrict).toBe(false);
+    expect(re.dupnames).toBe(false);
+    expect(re.ungreedy).toBe(false);
     expect(re.pcre2).toBe(false);
   });
 
@@ -106,6 +114,14 @@ describe.concurrent("PCRE2 constructor", () => {
     expect(re.extended).toBe(false);
     expect(re.extendedMore).toBe(false);
     expect(re.noAutoCapture).toBe(false);
+    expect(re.asciiBsd).toBe(false);
+    expect(re.asciiBss).toBe(false);
+    expect(re.asciiBsw).toBe(false);
+    expect(re.asciiDigit).toBe(false);
+    expect(re.asciiPosix).toBe(false);
+    expect(re.caselessRestrict).toBe(false);
+    expect(re.dupnames).toBe(false);
+    expect(re.ungreedy).toBe(false);
     expect(re.pcre2).toBe(false);
   });
 });
@@ -126,6 +142,14 @@ describe.concurrent("pcre2 tagged template literal", () => {
     expect(re.extended).toBe(false);
     expect(re.extendedMore).toBe(false);
     expect(re.noAutoCapture).toBe(false);
+    expect(re.asciiBsd).toBe(false);
+    expect(re.asciiBss).toBe(false);
+    expect(re.asciiBsw).toBe(false);
+    expect(re.asciiDigit).toBe(false);
+    expect(re.asciiPosix).toBe(false);
+    expect(re.caselessRestrict).toBe(false);
+    expect(re.dupnames).toBe(false);
+    expect(re.ungreedy).toBe(false);
     expect(re.pcre2).toBe(false);
   });
 
@@ -144,6 +168,14 @@ describe.concurrent("pcre2 tagged template literal", () => {
     expect(re.extended).toBe(false);
     expect(re.extendedMore).toBe(false);
     expect(re.noAutoCapture).toBe(false);
+    expect(re.asciiBsd).toBe(false);
+    expect(re.asciiBss).toBe(false);
+    expect(re.asciiBsw).toBe(false);
+    expect(re.asciiDigit).toBe(false);
+    expect(re.asciiPosix).toBe(false);
+    expect(re.caselessRestrict).toBe(false);
+    expect(re.dupnames).toBe(false);
+    expect(re.ungreedy).toBe(false);
     expect(re.pcre2).toBe(false);
   });
 });
@@ -158,7 +190,7 @@ describe.concurrent("exec", () => {
     );
   });
 
-  test("exec multiple times", () => {
+  test("multiple times", () => {
     const re = pcre2`abc`;
 
     let input = "abc";
@@ -266,33 +298,65 @@ describe.concurrent("exec", () => {
         index: 0,
         input,
         groups: { one: "bar", value: "123" },
-        indices: [[0, 14], [3, 6], [11, 14]],
+        indices: [
+          [0, 14],
+          [3, 6],
+          [11, 14],
+        ],
         groupsIndices: { one: [3, 6], value: [11, 14] },
       })
     );
   });
 });
 
-describe("test", () => {
-  test("test single match", () => {
+describe.concurrent("test", () => {
+  test("single match", () => {
     const re = pcre2`abc`;
-    expect(re.test("abc")).toBe(true)
+    expect(re.test("abc")).toBe(true);
     expect(re.test("foo")).toBe(false);
   });
 
-  test("test multiple match no global", () => {
+  test("multiple match no global", () => {
     const re = pcre2`abc`;
-    const input = "abcfooabc"
-    expect(re.test(input)).toBe(true)
+    const input = "abcfooabc";
+    expect(re.test(input)).toBe(true);
     expect(re.test(input)).toBe(true);
     expect(re.test(input)).toBe(true);
   });
 
-  test("test multiple match global", () => {
+  test("multiple match global", () => {
     const re = pcre2("g")`abc`;
-    const input = "abcfooabc"
-    expect(re.test(input)).toBe(true)
+    const input = "abcfooabc";
+    expect(re.test(input)).toBe(true);
     expect(re.test(input)).toBe(true);
     expect(re.test(input)).toBe(false);
   });
+
+  test("multiple match sticky", () => {
+    const re = pcre2("y")`abc`;
+    const input = "abcfooabc";
+    expect(re.test(input)).toBe(true);
+    expect(re.test(input)).toBe(false);
+    expect(re.test(input)).toBe(true);
+  });
+});
+
+describe.concurrent("match", () => {
+  test("single match", () => {
+    const re = pcre2`abc`;
+    const input = "abcfooabc";
+    const result = input.match(re);
+    expect(result).toStrictEqual(
+      createMatchArray(["abc"], { index: 0, input })
+    );
+  });
+
+  test("multiple match", () => {
+    const re = pcre2("g")`abc`;
+    const input = "abcfooabc";
+    const result = input.match(re);
+    expect(result).toStrictEqual(
+      ["abc", "abc"]
+    );
+  })
 });

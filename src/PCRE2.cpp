@@ -864,27 +864,27 @@ Napi::Value PCRE2::NoAutoCapture(const Napi::CallbackInfo &info) {
 }
 
 Napi::Value PCRE2::AsciiBsd(const Napi::CallbackInfo &info) {
-    return Napi::Boolean::New(info.Env(), m_extraOptions | PCRE2_EXTRA_ASCII_BSD);
+    return Napi::Boolean::New(info.Env(), m_extraOptions & PCRE2_EXTRA_ASCII_BSD);
 }
 
 Napi::Value PCRE2::AsciiBss(const Napi::CallbackInfo &info) {
-    return Napi::Boolean::New(info.Env(), m_extraOptions | PCRE2_EXTRA_ASCII_BSS);
+    return Napi::Boolean::New(info.Env(), m_extraOptions & PCRE2_EXTRA_ASCII_BSS);
 }
 
 Napi::Value PCRE2::AsciiBsw(const Napi::CallbackInfo &info) {
-    return Napi::Boolean::New(info.Env(), m_extraOptions | PCRE2_EXTRA_ASCII_BSW);
+    return Napi::Boolean::New(info.Env(), m_extraOptions & PCRE2_EXTRA_ASCII_BSW);
 }
 
 Napi::Value PCRE2::AsciiDigit(const Napi::CallbackInfo &info) {
-    return Napi::Boolean::New(info.Env(), m_extraOptions | PCRE2_EXTRA_ASCII_DIGIT);
+    return Napi::Boolean::New(info.Env(), m_extraOptions & PCRE2_EXTRA_ASCII_DIGIT);
 }
 
 Napi::Value PCRE2::AsciiPosix(const Napi::CallbackInfo &info) {
-    return Napi::Boolean::New(info.Env(), m_extraOptions | PCRE2_EXTRA_ASCII_POSIX);
+    return Napi::Boolean::New(info.Env(), m_extraOptions & PCRE2_EXTRA_ASCII_POSIX);
 }
 
 Napi::Value PCRE2::CaselessRestrict(const Napi::CallbackInfo &info) {
-    return Napi::Boolean::New(info.Env(), m_extraOptions | PCRE2_EXTRA_CASELESS_RESTRICT);
+    return Napi::Boolean::New(info.Env(), m_extraOptions & PCRE2_EXTRA_CASELESS_RESTRICT);
 }
 
 Napi::Value PCRE2::Dupnames(const Napi::CallbackInfo &info) {
