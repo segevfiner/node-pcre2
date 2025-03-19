@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { PCRE2, pcre2 } from "..";
 
 function createMatchArray(
@@ -441,7 +441,7 @@ describe.concurrent("matchAll", () => {
   test("missing global flag", () => {
     const re = pcre2`abc`;
     // @ts-expect-error Missing type
-    expect(() => "abc".matchAll(re)).toThrow();
+    expect(() => "abc".matchAll(re)).toThrow("String.prototype.matchAll called with a non-global RegExp argument");
   });
 });
 
@@ -465,5 +465,28 @@ describe.concurrent("replace", () => {
     const input = "abcfooabcfoo";
     const result = input.replace(re, "bar");
     expect(result).toBe("abcbarabcbar");
+  });
+
+  test("single replacement with function", () => {
+    const re = pcre2`foo`;
+    const input = "abcfooabcfoo";
+    const replacer = vi.fn(() => "bar");
+    // @ts-expect-error Missing type
+    const result = input.replace(re, replacer);
+    expect(result).toBe("abcbarabcfoo");
+    expect(replacer).toHaveBeenCalledExactlyOnceWith("foo", 3, "abcfooabcfoo");
+  });
+
+  test("multiple replacement with function", () => {
+    const re = pcre2("g")`foo`;
+    const input = "abcfooabcfoo";
+    const replacer = vi.fn(() => "bar");
+    // @ts-expect-error Missing type
+    const result = input.replace(re, replacer);
+    expect(result).toBe("abcbarabcbar");
+
+    expect(replacer).toHaveBeenCalledTimes(2);
+    expect(replacer).toHaveBeenNthCalledWith(1, "foo", 3, "abcfooabcfoo");
+    expect(replacer).toHaveBeenNthCalledWith(2, "foo", 9, "abcfooabcfoo");
   });
 });

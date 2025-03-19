@@ -606,6 +606,10 @@ Napi::Value PCRE2::Replace(const Napi::CallbackInfo &info) {
             result.append(replacement.Utf16Value());
             nextSubjectPosition = index.Int64Value() + matched.Utf16Value().length();
 
+            if (!m_global) {
+                break;
+            }
+
             options = 0;
             if (match.Get(0u).As<Napi::String>().Utf16Value().empty()) {
                 if (m_lastIndex == subjectStr.length()) {
