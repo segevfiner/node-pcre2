@@ -16,6 +16,7 @@ jobs:
   publish:
     name: Publish
     runs-on: ubuntu-22.04
+    needs: [prebuild]
     environment:
       name: npm
       url: https://www.npmjs.com/package/@segevfiner/pcre2
