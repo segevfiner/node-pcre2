@@ -9,6 +9,8 @@ declare namespace Addon {
     exec(string: string): RegExpExecArray | null;
     test(string: string): boolean;
 
+    toString(): string;
+
     readonly lastIndex: number;
     readonly source: string;
     readonly flags: string;

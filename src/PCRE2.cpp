@@ -354,7 +354,7 @@ Napi::Value PCRE2::ToString(const Napi::CallbackInfo &info) {
     oss << "pcre2";
 
     if (!m_flags.empty()) {
-        oss << "('" << m_flags << "')";
+        oss << "(\"" << m_flags << "\")";
     }
 
     std::string pattern = Napi::String::New(info.Env(), m_pattern).Utf8Value();

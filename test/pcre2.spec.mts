@@ -75,6 +75,7 @@ function createIndicesGroupsArray(indicesGroups?: {
 describe.concurrent("PCRE2 constructor", () => {
   test("single argument", () => {
     const re = new PCRE2("abc");
+    expect(re.toString()).toBe("pcre2`abc`");
     expect(re.source).toBe("abc");
     expect(re.flags).toBe("");
     expect(re.global).toBe(false);
@@ -101,6 +102,7 @@ describe.concurrent("PCRE2 constructor", () => {
 
   test("two arguments", () => {
     const re = new PCRE2("abc", "i");
+    expect(re.toString()).toBe('pcre2("i")`abc`');
     expect(re.source).toBe("abc");
     expect(re.flags).toBe("i");
     expect(re.global).toBe(false);
@@ -124,11 +126,20 @@ describe.concurrent("PCRE2 constructor", () => {
     expect(re.ungreedy).toBe(false);
     expect(re.pcre2).toBe(false);
   });
+
+  test("invalid regex", () => {
+    expect(() => {
+      new PCRE2("(");
+    }).toThrow(
+      "PCRE2 compilation failed at offset 1: missing closing parenthesis"
+    );
+  });
 });
 
 describe.concurrent("pcre2 tagged template literal", () => {
   test("no flags", () => {
     const re = pcre2`abc`;
+    expect(re.toString()).toBe("pcre2`abc`");
     expect(re.source).toBe("abc");
     expect(re.flags).toBe("");
     expect(re.global).toBe(false);
@@ -155,6 +166,7 @@ describe.concurrent("pcre2 tagged template literal", () => {
 
   test("with flags", () => {
     const re = pcre2("i")`abc`;
+    expect(re.toString()).toBe('pcre2("i")`abc`');
     expect(re.source).toBe("abc");
     expect(re.flags).toBe("i");
     expect(re.global).toBe(false);
@@ -190,6 +202,13 @@ describe.concurrent("exec", () => {
     );
   });
 
+  test("no match", () => {
+    const re = pcre2`abc`;
+    const input = "foo";
+    const result = re.exec(input);
+    expect(result).toBeNull();
+  });
+
   test("multiple times", () => {
     const re = pcre2`abc`;
 
@@ -215,10 +234,13 @@ describe.concurrent("exec", () => {
     const input = "abaac";
     let result = re.exec(input);
     expect(result).toStrictEqual(createMatchArray(["a"], { index: 0, input }));
+    expect(re.lastIndex).toBe(1);
     result = re.exec(input);
     expect(result).toStrictEqual(createMatchArray(["a"], { index: 2, input }));
+    expect(re.lastIndex).toBe(3);
     result = re.exec(input);
     expect(result).toStrictEqual(createMatchArray(["a"], { index: 3, input }));
+    expect(re.lastIndex).toBe(4);
     result = re.exec(input);
     expect(result).toBeNull();
   });
@@ -355,8 +377,93 @@ describe.concurrent("match", () => {
     const re = pcre2("g")`abc`;
     const input = "abcfooabc";
     const result = input.match(re);
-    expect(result).toStrictEqual(
-      ["abc", "abc"]
-    );
-  })
+    expect(result).toStrictEqual(["abc", "abc"]);
+  });
+});
+
+describe.concurrent("search", () => {
+  test("single match at start", () => {
+    const re = pcre2`abc`;
+    const input = "abcfooabc";
+    const result = input.search(re);
+    expect(result).toBe(0);
+  });
+
+  test("single match", () => {
+    const re = pcre2("g")`abc`;
+    const input = "fooabc";
+    const result = input.search(re);
+    expect(result).toBe(3);
+  });
+});
+
+describe.concurrent("matchAll", () => {
+  test("single match", () => {
+    const re = pcre2("g")`abc`;
+    const input = "fooabc";
+    // @ts-expect-error Missing type
+    const result = input.matchAll(re);
+    expect([...result]).toStrictEqual([
+      createMatchArray(["abc"], { index: 3, input }),
+    ]);
+  });
+
+  test("multiple match", () => {
+    const re = pcre2("g")`abc`;
+    const input = "abcfooabc";
+    // @ts-expect-error Missing type
+    const result = input.matchAll(re);
+    expect([...result]).toStrictEqual([
+      createMatchArray(["abc"], { index: 0, input }),
+      createMatchArray(["abc"], { index: 6, input }),
+    ]);
+  });
+
+  test("multiple match with groups", () => {
+    const re = pcre2("g")`a(b)c`;
+    const input = "abcfooabc";
+    // @ts-expect-error Missing type
+    const result = input.matchAll(re);
+    expect([...result]).toStrictEqual([
+      createMatchArray(["abc", "b"], { index: 0, input }),
+      createMatchArray(["abc", "b"], { index: 6, input }),
+    ]);
+  });
+
+  test("no match", () => {
+    const re = pcre2("g")`abc`;
+    const input = "foo";
+    // @ts-expect-error Missing type
+    const result = input.matchAll(re);
+    expect([...result]).toStrictEqual([]);
+  });
+
+  test("missing global flag", () => {
+    const re = pcre2`abc`;
+    // @ts-expect-error Missing type
+    expect(() => "abc".matchAll(re)).toThrow();
+  });
+});
+
+describe.concurrent("replace", () => {
+  test("single replacement", () => {
+    const re = pcre2`foo`;
+    const input = "abcfooabcfoo";
+    const result = input.replace(re, "bar");
+    expect(result).toBe("abcbarabcfoo");
+  });
+
+  test("single replacement with back reference", () => {
+    const re = pcre2`f(o)o`;
+    const input = "abcfooabcfoo";
+    const result = input.replace(re, "b$1r");
+    expect(result).toBe("abcborabcfoo");
+  });
+
+  test("multiple replacement", () => {
+    const re = pcre2("g")`foo`;
+    const input = "abcfooabcfoo";
+    const result = input.replace(re, "bar");
+    expect(result).toBe("abcbarabcbar");
+  });
 });
