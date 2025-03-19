@@ -7,6 +7,7 @@
         "module": "preserve",
         "moduleResolution": "bundler",
         "rootDir": ".",
+        "tsBuildInfoFile": "tsconfig.vitest.tsbuildinfo",
         "noEmit": true
     }
 }
