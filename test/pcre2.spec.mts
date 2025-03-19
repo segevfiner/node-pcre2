@@ -460,7 +460,7 @@ describe.concurrent("replace", () => {
     expect(result).toBe("abcborabcfoo");
   });
 
-  test("multiple replacement", () => {
+  test("multiple replacements", () => {
     const re = pcre2("g")`foo`;
     const input = "abcfooabcfoo";
     const result = input.replace(re, "bar");
@@ -477,7 +477,7 @@ describe.concurrent("replace", () => {
     expect(replacer).toHaveBeenCalledExactlyOnceWith("foo", 3, "abcfooabcfoo");
   });
 
-  test("multiple replacement with function", () => {
+  test("multiple replacements with function", () => {
     const re = pcre2("g")`foo`;
     const input = "abcfooabcfoo";
     const replacer = vi.fn(() => "bar");
@@ -490,3 +490,35 @@ describe.concurrent("replace", () => {
     expect(replacer).toHaveBeenNthCalledWith(2, "foo", 9, "abcfooabcfoo");
   });
 });
+
+describe.concurrent("replace", () => {
+  test("single replacement", () => {
+    const re = pcre2("g")`foo`;
+    const input = "abcfooabc";
+    // @ts-expect-error Missing type
+    const result = input.replaceAll(re, "bar");
+    expect(result).toBe("abcbarabc");
+  });
+
+  test("multiple replacements", () => {
+    const re = pcre2("g")`foo`;
+    const input = "abcfooabcfoo";
+    // @ts-expect-error Missing type
+    const result = input.replaceAll(re, "bar");
+    expect(result).toBe("abcbarabcbar");
+  });
+
+  test("single replacement with back reference", () => {
+    const re = pcre2("g")`f(o)o`;
+    const input = "abcfooabcfoo";
+    // @ts-expect-error Missing type
+    const result = input.replaceAll(re, "b$1r");
+    expect(result).toBe("abcborabcbor");
+  });
+
+  test("non-global PCRE2", () => {
+    const re = pcre2`foo`;
+    // @ts-expect-error Missing type
+    expect(() => "foo".replaceAll(re)).toThrow("String.prototype.replaceAll called with a non-global RegExp argument")
+;  });
+})
