@@ -471,7 +471,6 @@ describe.concurrent("replace", () => {
     const re = pcre2`foo`;
     const input = "abcfooabcfoo";
     const replacer = vi.fn(() => "bar");
-    // @ts-expect-error Missing type
     const result = input.replace(re, replacer);
     expect(result).toBe("abcbarabcfoo");
     expect(replacer).toHaveBeenCalledExactlyOnceWith("foo", 3, "abcfooabcfoo");
@@ -481,7 +480,6 @@ describe.concurrent("replace", () => {
     const re = pcre2("g")`foo`;
     const input = "abcfooabcfoo";
     const replacer = vi.fn(() => "bar");
-    // @ts-expect-error Missing type
     const result = input.replace(re, replacer);
     expect(result).toBe("abcbarabcbar");
 

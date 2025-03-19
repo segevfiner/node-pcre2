@@ -28,6 +28,7 @@ declare namespace Addon {
     [Symbol.split](string: string, limit?: number): string[];
     [Symbol.matchAll](str: string): RegExpStringIterator<RegExpMatchArray>;
     [Symbol.replace](str: string, replacement: string): string;
+    [Symbol.replace](string: string, replacer: (substring: string, ...args: unknown[]) => string): string;
 
     // PCRE2 extras
     readonly extended: boolean;
