@@ -41,7 +41,7 @@ Napi::Object PCRE2::Init(Napi::Env env, Napi::Object exports) {
         InstanceAccessor<&PCRE2::CaselessRestrict>("caselessRestrict"),
         InstanceAccessor<&PCRE2::Dupnames>("dupnames"),
         InstanceAccessor<&PCRE2::Ungreedy>("ungreedy"),
-        InstanceAccessor<&PCRE2::PCRE2Mode>("pcre2"),
+        InstanceAccessor<&PCRE2::PCRE2Mode>("pcre2Mode"),
         StaticAccessor<&PCRE2::Species>(instanceData->Symbol.Get("species").As<Napi::Symbol>()),
     });
 

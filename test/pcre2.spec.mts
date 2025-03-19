@@ -97,7 +97,7 @@ describe.concurrent("PCRE2 constructor", () => {
     expect(re.caselessRestrict).toBe(false);
     expect(re.dupnames).toBe(false);
     expect(re.ungreedy).toBe(false);
-    expect(re.pcre2).toBe(false);
+    expect(re.pcre2Mode).toBe(false);
   });
 
   test("two arguments", () => {
@@ -124,7 +124,7 @@ describe.concurrent("PCRE2 constructor", () => {
     expect(re.caselessRestrict).toBe(false);
     expect(re.dupnames).toBe(false);
     expect(re.ungreedy).toBe(false);
-    expect(re.pcre2).toBe(false);
+    expect(re.pcre2Mode).toBe(false);
   });
 
   test("invalid regex", () => {
@@ -161,7 +161,7 @@ describe.concurrent("pcre2 tagged template literal", () => {
     expect(re.caselessRestrict).toBe(false);
     expect(re.dupnames).toBe(false);
     expect(re.ungreedy).toBe(false);
-    expect(re.pcre2).toBe(false);
+    expect(re.pcre2Mode).toBe(false);
   });
 
   test("with flags", () => {
@@ -188,7 +188,7 @@ describe.concurrent("pcre2 tagged template literal", () => {
     expect(re.caselessRestrict).toBe(false);
     expect(re.dupnames).toBe(false);
     expect(re.ungreedy).toBe(false);
-    expect(re.pcre2).toBe(false);
+    expect(re.pcre2Mode).toBe(false);
   });
 });
 

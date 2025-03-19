@@ -41,7 +41,7 @@ declare namespace Addon {
     readonly caselessRestrict: boolean;
     readonly dupnames: boolean;
     readonly ungreedy: boolean;
-    readonly pcre2: boolean;
+    readonly pcre2Mode: boolean;
   }
 
   const PCRE2_MAJOR: number;
