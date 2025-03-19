@@ -36,7 +36,7 @@ jobs:
 
       - name: Prebuild (arm64)
         if: startsWith(matrix.runs-on, 'macos')
-        run: pnpm prebuild -- --arch arm64
+        run: pnpm prebuild --arch arm64
 
       - name: Upload
         uses: actions/upload-artifact@v4
