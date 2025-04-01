@@ -53,13 +53,13 @@
     "@eslint/js": "^9.23.0",
     "@tsconfig/node20": "^20.1.5",
     "@types/bindings": "^1.5.5",
-    "@types/node": "^20.17.27",
+    "@types/node": "^20.17.30",
     "eslint": "^9.23.0",
     "globals": "^16.0.0",
     "prebuild": "^13.0.1",
     "typescript": "~5.8.2",
-    "typescript-eslint": "^8.28.0",
-    "vitest": "^3.0.9"
+    "typescript-eslint": "^8.29.0",
+    "vitest": "^3.1.1"
   },
   "files": [
     "CMakeLists.txt",
