@@ -16,6 +16,28 @@
             "compileCommands": [
                 "${workspaceFolder}/build/compile_commands.json"
             ]
+        },
+        {
+            "name": "Win32",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "${workspaceFolder}\\node_modules\\.pnpm\\node-api-headers@1.5.0\\node_modules\\node-api-headers\\include",
+                "${workspaceFolder}\\node_modules\\.pnpm\\node-addon-api@8.3.1\\node_modules\\node-addon-api",
+                "${workspaceFolder}\\build\\pcre2"
+            ],
+            "defines": [
+                "_DEBUG",
+                "UNICODE",
+                "_UNICODE",
+                "NODE_ADDON_API_CPP_EXCEPTIONS",
+                "PCRE2_STATIC",
+                "PCRE2_CODE_UNIT_WIDTH=16"
+            ],
+            "windowsSdkVersion": "10.0.22621.0",
+            "compilerPath": "cl.exe",
+            "cStandard": "c17",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "windows-msvc-x64"
         }
     ],
     "version": 4
