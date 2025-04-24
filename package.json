@@ -1,6 +1,6 @@
 {
   "name": "@segevfiner/pcre2",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Node-API bindings to PCRE2",
   "type": "commonjs",
   "types": "./dist/index.d.ts",
