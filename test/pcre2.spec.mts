@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from "vitest";
+import { describe, test, vi } from "vitest";
 import { PCRE2, pcre2 } from "..";
 
 function createMatchArray(
@@ -73,7 +73,7 @@ function createIndicesGroupsArray(indicesGroups?: {
 }
 
 describe.concurrent("PCRE2 constructor", () => {
-  test("single argument", () => {
+  test("single argument", ({ expect }) => {
     const re = new PCRE2("abc");
     expect(re.toString()).toBe("pcre2`abc`");
     expect(re.source).toBe("abc");
@@ -100,7 +100,7 @@ describe.concurrent("PCRE2 constructor", () => {
     expect(re.pcre2Mode).toBe(false);
   });
 
-  test("two arguments", () => {
+  test("two arguments", ({ expect }) => {
     const re = new PCRE2("abc", "i");
     expect(re.toString()).toBe('pcre2("i")`abc`');
     expect(re.source).toBe("abc");
@@ -127,7 +127,7 @@ describe.concurrent("PCRE2 constructor", () => {
     expect(re.pcre2Mode).toBe(false);
   });
 
-  test("invalid regex", () => {
+  test("invalid regex", ({ expect }) => {
     expect(() => {
       new PCRE2("(");
     }).toThrow(
@@ -137,7 +137,7 @@ describe.concurrent("PCRE2 constructor", () => {
 });
 
 describe.concurrent("pcre2 tagged template literal", () => {
-  test("no flags", () => {
+  test("no flags", ({ expect }) => {
     const re = pcre2`abc`;
     expect(re.toString()).toBe("pcre2`abc`");
     expect(re.source).toBe("abc");
@@ -164,7 +164,7 @@ describe.concurrent("pcre2 tagged template literal", () => {
     expect(re.pcre2Mode).toBe(false);
   });
 
-  test("with flags", () => {
+  test("with flags", ({ expect }) => {
     const re = pcre2("i")`abc`;
     expect(re.toString()).toBe('pcre2("i")`abc`');
     expect(re.source).toBe("abc");
@@ -193,7 +193,7 @@ describe.concurrent("pcre2 tagged template literal", () => {
 });
 
 describe.concurrent("exec", () => {
-  test("single match", () => {
+  test("single match", ({ expect }) => {
     const re = pcre2`abc`;
     const input = "abc";
     const result = re.exec(input);
@@ -202,14 +202,14 @@ describe.concurrent("exec", () => {
     );
   });
 
-  test("no match", () => {
+  test("no match", ({ expect }) => {
     const re = pcre2`abc`;
     const input = "foo";
     const result = re.exec(input);
     expect(result).toBeNull();
   });
 
-  test("multiple times", () => {
+  test("multiple times", ({ expect }) => {
     const re = pcre2`abc`;
 
     let input = "abc";
@@ -229,7 +229,7 @@ describe.concurrent("exec", () => {
     );
   });
 
-  test("multiple match", () => {
+  test("multiple match", ({ expect }) => {
     const re = pcre2("g")`a`;
     const input = "abaac";
     let result = re.exec(input);
@@ -245,7 +245,7 @@ describe.concurrent("exec", () => {
     expect(result).toBeNull();
   });
 
-  test("multiple match with indices", () => {
+  test("multiple match with indices", ({ expect }) => {
     const re = pcre2("gd")`a`;
     const input = "abaac";
     let result = re.exec(input);
@@ -276,7 +276,7 @@ describe.concurrent("exec", () => {
     expect(result).toBeNull();
   });
 
-  test("single match with captures", () => {
+  test("single match with captures", ({ expect }) => {
     const re = pcre2`^foo(bar)qux: (\d+)$`;
     const input = "foobarqux: 123";
     const result = re.exec(input);
@@ -285,7 +285,7 @@ describe.concurrent("exec", () => {
     );
   });
 
-  test("single match with named captures", () => {
+  test("single match with named captures", ({ expect }) => {
     const re = pcre2`^foo(?<one>bar)qux: (?<value>\d+)$`;
     const input = "foobarqux: 123";
     const result = re.exec(input);
@@ -298,7 +298,7 @@ describe.concurrent("exec", () => {
     );
   });
 
-  test("single match with named captures", () => {
+  test("single match with named captures", ({ expect }) => {
     const re = pcre2`^foo(?<one>bar)qux: (?<value>\d+)$`;
     const input = "foobarqux: 123";
     const result = re.exec(input);
@@ -311,7 +311,7 @@ describe.concurrent("exec", () => {
     );
   });
 
-  test("single match with named captures and indices", () => {
+  test("single match with named captures and indices", ({ expect }) => {
     const re = pcre2("d")`^foo(?<one>bar)qux: (?<value>\d+)$`;
     const input = "foobarqux: 123";
     const result = re.exec(input);
@@ -332,13 +332,13 @@ describe.concurrent("exec", () => {
 });
 
 describe.concurrent("test", () => {
-  test("single match", () => {
+  test("single match", ({ expect }) => {
     const re = pcre2`abc`;
     expect(re.test("abc")).toBe(true);
     expect(re.test("foo")).toBe(false);
   });
 
-  test("multiple match no global", () => {
+  test("multiple match no global", ({ expect }) => {
     const re = pcre2`abc`;
     const input = "abcfooabc";
     expect(re.test(input)).toBe(true);
@@ -346,7 +346,7 @@ describe.concurrent("test", () => {
     expect(re.test(input)).toBe(true);
   });
 
-  test("multiple match global", () => {
+  test("multiple match global", ({ expect }) => {
     const re = pcre2("g")`abc`;
     const input = "abcfooabc";
     expect(re.test(input)).toBe(true);
@@ -354,7 +354,7 @@ describe.concurrent("test", () => {
     expect(re.test(input)).toBe(false);
   });
 
-  test("multiple match sticky", () => {
+  test("multiple match sticky", ({ expect }) => {
     const re = pcre2("y")`abc`;
     const input = "abcfooabc";
     expect(re.test(input)).toBe(true);
@@ -364,7 +364,7 @@ describe.concurrent("test", () => {
 });
 
 describe.concurrent("match", () => {
-  test("single match", () => {
+  test("single match", ({ expect }) => {
     const re = pcre2`abc`;
     const input = "abcfooabc";
     const result = input.match(re);
@@ -373,7 +373,7 @@ describe.concurrent("match", () => {
     );
   });
 
-  test("multiple match", () => {
+  test("multiple match", ({ expect }) => {
     const re = pcre2("g")`abc`;
     const input = "abcfooabc";
     const result = input.match(re);
@@ -382,14 +382,14 @@ describe.concurrent("match", () => {
 });
 
 describe.concurrent("search", () => {
-  test("single match at start", () => {
+  test("single match at start", ({ expect }) => {
     const re = pcre2`abc`;
     const input = "abcfooabc";
     const result = input.search(re);
     expect(result).toBe(0);
   });
 
-  test("single match", () => {
+  test("single match", ({ expect }) => {
     const re = pcre2("g")`abc`;
     const input = "fooabc";
     const result = input.search(re);
@@ -398,7 +398,7 @@ describe.concurrent("search", () => {
 });
 
 describe.concurrent("matchAll", () => {
-  test("single match", () => {
+  test("single match", ({ expect }) => {
     const re = pcre2("g")`abc`;
     const input = "fooabc";
     // @ts-expect-error Missing type
@@ -408,7 +408,7 @@ describe.concurrent("matchAll", () => {
     ]);
   });
 
-  test("multiple match", () => {
+  test("multiple match", ({ expect }) => {
     const re = pcre2("g")`abc`;
     const input = "abcfooabc";
     // @ts-expect-error Missing type
@@ -419,7 +419,7 @@ describe.concurrent("matchAll", () => {
     ]);
   });
 
-  test("multiple match with groups", () => {
+  test("multiple match with groups", ({ expect }) => {
     const re = pcre2("g")`a(b)c`;
     const input = "abcfooabc";
     // @ts-expect-error Missing type
@@ -430,7 +430,7 @@ describe.concurrent("matchAll", () => {
     ]);
   });
 
-  test("no match", () => {
+  test("no match", ({ expect }) => {
     const re = pcre2("g")`abc`;
     const input = "foo";
     // @ts-expect-error Missing type
@@ -438,36 +438,38 @@ describe.concurrent("matchAll", () => {
     expect([...result]).toStrictEqual([]);
   });
 
-  test("missing global flag", () => {
+  test("missing global flag", ({ expect }) => {
     const re = pcre2`abc`;
     // @ts-expect-error Missing type
-    expect(() => "abc".matchAll(re)).toThrow("String.prototype.matchAll called with a non-global RegExp argument");
+    expect(() => "abc".matchAll(re)).toThrow(
+      "String.prototype.matchAll called with a non-global RegExp argument"
+    );
   });
 });
 
 describe.concurrent("replace", () => {
-  test("single replacement", () => {
+  test("single replacement", ({ expect }) => {
     const re = pcre2`foo`;
     const input = "abcfooabcfoo";
     const result = input.replace(re, "bar");
     expect(result).toBe("abcbarabcfoo");
   });
 
-  test("single replacement with back reference", () => {
+  test("single replacement with back reference", ({ expect }) => {
     const re = pcre2`f(o)o`;
     const input = "abcfooabcfoo";
     const result = input.replace(re, "b$1r");
     expect(result).toBe("abcborabcfoo");
   });
 
-  test("multiple replacements", () => {
+  test("multiple replacements", ({ expect }) => {
     const re = pcre2("g")`foo`;
     const input = "abcfooabcfoo";
     const result = input.replace(re, "bar");
     expect(result).toBe("abcbarabcbar");
   });
 
-  test("single replacement with function", () => {
+  test("single replacement with function", ({ expect }) => {
     const re = pcre2`foo`;
     const input = "abcfooabcfoo";
     const replacer = vi.fn(() => "bar");
@@ -476,7 +478,7 @@ describe.concurrent("replace", () => {
     expect(replacer).toHaveBeenCalledExactlyOnceWith("foo", 3, "abcfooabcfoo");
   });
 
-  test("multiple replacements with function", () => {
+  test("multiple replacements with function", ({ expect }) => {
     const re = pcre2("g")`foo`;
     const input = "abcfooabcfoo";
     const replacer = vi.fn(() => "bar");
@@ -490,7 +492,7 @@ describe.concurrent("replace", () => {
 });
 
 describe.concurrent("replace", () => {
-  test("single replacement", () => {
+  test("single replacement", ({ expect }) => {
     const re = pcre2("g")`foo`;
     const input = "abcfooabc";
     // @ts-expect-error Missing type
@@ -498,7 +500,7 @@ describe.concurrent("replace", () => {
     expect(result).toBe("abcbarabc");
   });
 
-  test("multiple replacements", () => {
+  test("multiple replacements", ({ expect }) => {
     const re = pcre2("g")`foo`;
     const input = "abcfooabcfoo";
     // @ts-expect-error Missing type
@@ -506,7 +508,7 @@ describe.concurrent("replace", () => {
     expect(result).toBe("abcbarabcbar");
   });
 
-  test("single replacement with back reference", () => {
+  test("single replacement with back reference", ({ expect }) => {
     const re = pcre2("g")`f(o)o`;
     const input = "abcfooabcfoo";
     // @ts-expect-error Missing type
@@ -514,9 +516,11 @@ describe.concurrent("replace", () => {
     expect(result).toBe("abcborabcbor");
   });
 
-  test("non-global PCRE2", () => {
+  test("non-global PCRE2", ({ expect }) => {
     const re = pcre2`foo`;
     // @ts-expect-error Missing type
-    expect(() => "foo".replaceAll(re)).toThrow("String.prototype.replaceAll called with a non-global RegExp argument")
-;  });
-})
+    expect(() => "foo".replaceAll(re)).toThrow(
+      "String.prototype.replaceAll called with a non-global RegExp argument"
+    );
+  });
+});
