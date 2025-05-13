@@ -1,23 +1,28 @@
+// @ts-check
+import { defineConfig } from "eslint/config";
 import globals from "globals";
-import pluginJs from "@eslint/js";
+import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 
-/** @type {import('eslint').Linter.Config[]} */
-export default [
-  { files: ["**/*.{js,mjs,cjs,ts,mts,cts}"] },
-  { ignores: ["dist/", "build/"] },
-  { languageOptions: { globals: globals.node } },
-  pluginJs.configs.recommended,
-  ...tseslint.configs.recommendedTypeChecked,
+export default defineConfig([
   {
-    rules: {
-      "@typescript-eslint/no-namespace": ["error", { allowDeclarations: true }],
-    },
+    files: ["**/*.{js,mjs,cjs,ts}"],
     languageOptions: {
+      globals: globals.node,
       parserOptions: {
         projectService: true,
         tsconfigRootDir: import.meta.dirname,
       },
     },
+    plugins: { js },
+    extends: ["js/recommended"],
   },
-];
+  // @ts-expect-error https://github.com/typescript-eslint/typescript-eslint/issues/10935
+  tseslint.configs.recommendedTypeChecked,
+  {
+    rules: {
+      "@typescript-eslint/no-namespace": ["error", { allowDeclarations: true }],
+    },
+  },
+  { ignores: ["dist/", "build/"] },
+]);
