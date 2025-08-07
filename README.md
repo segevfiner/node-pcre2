@@ -26,11 +26,11 @@ The template literal can be called and then used a a literal to add flags as
 shown above (e.g. `` pcre2("g")`foo(bar)+` ``).
 
 The `PCRE2` object has the same interface as the builtin JavaScript [`RegExp`]
-object, and can be use with the string methods taking a `RegExp` as well (Such
+object, and can be used with the string methods taking a `RegExp` as well (Such
 as `match`, `matchAll`, `replace`, etc.).
 
-By default the library enables a few PCRE2 options to more closely behave like
-JavaScript's builtin `RegExp`, namely: `PCRE2_ALT_BSUX`, `PCRE2_DOLLAR_ENDONLY`, `PCRE2_MATCH_UNSET_BACKREF`, `PCRE2_EXTRA_ALT_BSUX`, and the behavior on empty matches is the one specified by JavaScript rather than pcre2grep, this can be toggled using the `p` (`pcre2Mode`) flag.
+By default, the library enables a few PCRE2 options to more closely behave like
+JavaScript's builtin `RegExp`, namely: `PCRE2_ALT_BSUX`, `PCRE2_DOLLAR_ENDONLY`, `PCRE2_MATCH_UNSET_BACKREF`, `PCRE2_EXTRA_ALT_BSUX`, and the behavior on empty matches is the one specified by JavaScript rather than `pcre2grep`, this can be toggled using the `p` (`pcre2Mode`) flag.
 
 Additional flags supported by PCRE2 are supported (See [PCRE2 docs] for details):
 * `x` (`extended`) - Ignores whitespace in the pattern and allows comments.
