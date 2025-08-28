@@ -2,7 +2,7 @@
 [![NPM Version](https://img.shields.io/npm/v/%40segevfiner%2Fpcre2)](https://www.npmjs.com/package/@segevfiner/pcre2)
 [![CI](https://github.com/segevfiner/node-pcre2/actions/workflows/ci.yml/badge.svg)](https://github.com/segevfiner/node-pcre2/actions/workflows/ci.yml)
 
-Node-API bindings to PCRE2.
+Node-API bindings to [PCRE2](https://pcre2project.github.io/pcre2/).
 
 Install using:
 ```sh
