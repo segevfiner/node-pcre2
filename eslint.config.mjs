@@ -17,7 +17,6 @@ export default defineConfig([
     plugins: { js },
     extends: ["js/recommended"],
   },
-  // @ts-expect-error https://github.com/typescript-eslint/typescript-eslint/issues/10935
   tseslint.configs.recommendedTypeChecked,
   {
     rules: {
