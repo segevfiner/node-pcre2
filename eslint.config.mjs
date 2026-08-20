@@ -1,5 +1,5 @@
 // @ts-check
-import { defineConfig } from "eslint/config";
+import { defineConfig, globalIgnores } from "eslint/config";
 import globals from "globals";
 import js from "@eslint/js";
 import tseslint from "typescript-eslint";
@@ -23,5 +23,5 @@ export default defineConfig([
       "@typescript-eslint/no-namespace": ["error", { allowDeclarations: true }],
     },
   },
-  { ignores: ["dist/", "build/"] },
+  globalIgnores(["dist/", "build/"]),
 ]);
