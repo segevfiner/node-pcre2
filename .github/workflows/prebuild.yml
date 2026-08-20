@@ -32,14 +32,18 @@ jobs:
         run: pnpm install
 
       - name: Prebuild
-        run: pnpm build:prebuild
+        run: |
+          pnpm cmake-js build
+          pnpm pkg-prebuilds-copy --baseDir build/Release --source pcre2.node --name=pcre2 --strip --napi_version=8
 
-      - name: Prebuild (arm64)
+      - name: Prebuild (x64)
         if: startsWith(matrix.runs-on, 'macos')
-        run: pnpm build:prebuild --arch x64
+        run: |
+          pnpm cmake-js build --arch x64
+          pnpm pkg-prebuilds-copy --baseDir build/Release --source pcre2.node --name=pcre2 --strip --napi_version=8 --arch x64
 
       - name: Upload
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: prebuilds-${{ matrix.runs-on }}
           path: prebuilds

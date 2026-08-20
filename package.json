@@ -13,12 +13,11 @@
   },
   "scripts": {
     "prepack": "tsc -b",
-    "install": "prebuild-install -r napi || cmake-js compile",
+    "install": "pkg-prebuilds-verify ./binding-options.js || cmake-js compile",
     "compile": "tsc -b && cmake-js compile",
     "compile-debug": "tsc -b && pnpm cmake-js clean && cmake-js compile -D --CDCMAKE_EXPORT_COMPILE_COMMANDS=ON",
     "build": "tsc -b && cmake-js build",
     "clean": "cmake-js clean",
-    "build:prebuild": "prebuild --backend cmake-js -r napi -t 8 --strip",
     "type-check": "tsc -b -f --noEmit",
     "lint": "eslint",
     "test": "vitest"
@@ -37,35 +36,33 @@
   ],
   "author": "Segev Finer <segev208@gmail.com>",
   "license": "BSD-3-Clause",
-  "binary": {
-    "napi_versions": [
-      8
-    ]
-  },
   "packageManager": "pnpm@11.22.0+sha512.1ff870c4c6133dfd88fb2afc46dd13d47f09c9794b438c6fdb47ca98caf3bc16381ee0be93a091b8e3824cf01f889f46d7d9e20910fb0be1ab0fb5baa80dd621",
   "dependencies": {
-    "bindings": "^1.5.0",
     "cmake-js": "^8.0.0",
     "node-addon-api": "^8.9.2",
-    "prebuild-install": "^7.1.3"
+    "pkg-prebuilds": "^1.1.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@tsconfig/node20": "^20.1.10",
-    "@types/bindings": "^1.5.5",
-    "@types/node": "^20.19.43",
+    "@tsconfig/node24": "^24.0.5",
+    "@types/node": "^24.1.0",
     "eslint": "^10.8.1",
     "globals": "^17.11.0",
-    "prebuild": "^13.0.1",
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.67.0",
     "vitest": "^4.1.11"
+  },
+  "binary": {
+    "napi_versions": [8]
   },
   "files": [
     "CMakeLists.txt",
     "src",
     "lib",
     "dist",
-    "pcre2"
+    "pcre2",
+    "binding-options.js",
+    "binding-options.d.ts",
+    "prebuilds"
   ]
 }
