@@ -1,4 +1,7 @@
-import bindings from "bindings";
+import path from "node:path";
+import pkgPrebuilds from "pkg-prebuilds";
+
+import bindingOptions from "../binding-options.js";
 
 declare namespace Addon {
   class PCRE2 {
@@ -49,9 +52,10 @@ declare namespace Addon {
   const PCRE2_MINOR: number;
 }
 
-export const { PCRE2, PCRE2_MAJOR, PCRE2_MINOR } = bindings(
-  "pcre2.node"
-) as typeof Addon;
+export const { PCRE2, PCRE2_MAJOR, PCRE2_MINOR } = pkgPrebuilds<typeof Addon>(
+  path.join(__dirname, ".."),
+  bindingOptions
+);
 
 type pcre2Tag = {
   (flags: string): pcre2Tag;

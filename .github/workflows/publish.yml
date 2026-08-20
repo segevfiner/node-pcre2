@@ -41,14 +41,11 @@ jobs:
         run: pnpm install
 
       - name: Download prebuilds
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: prebuilds-*
           merge-multiple: true
           path: prebuilds
-
-      - name: Publish prebuilds
-        run: pnpm prebuild --upload-all ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish
         run: pnpm publish --access public --no-git-checks --provenance

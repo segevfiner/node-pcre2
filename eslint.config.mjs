@@ -10,7 +10,9 @@ export default defineConfig([
     languageOptions: {
       globals: globals.node,
       parserOptions: {
-        projectService: true,
+        projectService: {
+          allowDefaultProject: ["binding-options.js"],
+        },
         tsconfigRootDir: import.meta.dirname,
       },
     },
@@ -23,5 +25,5 @@ export default defineConfig([
       "@typescript-eslint/no-namespace": ["error", { allowDeclarations: true }],
     },
   },
-  globalIgnores(["dist/", "build/"]),
+  globalIgnores(["dist/", "build/", "pcre2/"]),
 ]);
