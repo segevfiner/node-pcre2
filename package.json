@@ -52,6 +52,9 @@
     "typescript-eslint": "^8.67.0",
     "vitest": "^4.1.11"
   },
+  "binary": {
+    "napi_versions": [8]
+  },
   "files": [
     "CMakeLists.txt",
     "src",
