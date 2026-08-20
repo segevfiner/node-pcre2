@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 * Migrated to pkg-prebuilds from prebuild.
+* Switch to Node.js 24
 
 ## [0.1.2] - 2025-08-28
 
